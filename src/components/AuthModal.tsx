@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { X, Key, CheckCircle, LogOut, ShieldAlert, User } from 'lucide-react';
+import { X, Key, CheckCircle, LogOut, ShieldAlert, User, ChevronDown, ChevronUp } from 'lucide-react';
 import { UserProfile } from '../types';
+import { initiateGithubOAuth } from '../services/authService';
 
 const GithubIcon: React.FC<{ size?: number; color?: string }> = ({ size = 20, color = 'currentColor' }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -27,10 +28,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [tokenInput, setTokenInput] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [showPatInput, setShowPatInput] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmitPat = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!tokenInput.trim()) return;
 
@@ -52,7 +54,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-card" style={{ maxWidth: '480px' }} onClick={(e) => e.stopPropagation()}>
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 1.25rem', borderBottom: '1px solid var(--border-color)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 1.25rem', borderBottom: '1px solid var(--border-color)', background: 'var(--bg-secondary)' }}>
           <div style={{ fontWeight: 700, fontSize: '1.1rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
             <GithubIcon size={22} color="var(--accent-primary)" />
             <span>GitHub Authentication</span>
@@ -62,10 +64,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </button>
         </div>
 
-        <div style={{ padding: '1.25rem' }}>
+        <div style={{ padding: '1.5rem' }}>
           {userProfile ? (
             /* Authenticated Profile View */
-            <div style={{ textAlign: 'center', padding: '1rem 0' }}>
+            <div style={{ textAlign: 'center', padding: '0.5rem 0' }}>
               <img
                 src={userProfile.avatarUrl}
                 alt={userProfile.username}
@@ -95,7 +97,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
               <div className="badge" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', marginBottom: '1.5rem', background: 'rgba(16, 185, 129, 0.1)', color: 'var(--accent-success)', border: '1px solid var(--accent-success)' }}>
                 <CheckCircle size={14} style={{ marginRight: '0.4rem' }} />
-                Authenticated reader (5,000 requests/hr API rate limit)
+                Logged in via GitHub SSO (5,000 requests/hr rate limit)
               </div>
 
               <button
@@ -110,43 +112,78 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </button>
             </div>
           ) : (
-            /* Login Form */
-            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                Connect your GitHub Personal Access Token (PAT) to display your avatar, save reading history, and get 5,000 GitHub API requests per hour.
+            /* Login Options */
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', lineHeight: 1.5, textAlign: 'center' }}>
+                Sign in with your GitHub account for 1-click single sign-on, personalized reading history, and 5,000 API requests/hour.
               </p>
 
-              <div>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 600, fontSize: '0.85rem', marginBottom: '0.4rem', color: 'var(--text-main)' }}>
-                  <Key size={15} color="var(--accent-primary)" />
-                  GitHub Personal Access Token (PAT)
-                </label>
-                <input
-                  type="password"
-                  className="input-field"
-                  placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
-                  value={tokenInput}
-                  onChange={(e) => setTokenInput(e.target.value)}
-                  style={{ width: '100%', fontFamily: 'var(--font-mono)' }}
-                  required
-                />
-              </div>
-
-              {errorMsg && (
-                <div style={{ color: 'var(--accent-danger)', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                  <ShieldAlert size={14} />
-                  <span>{errorMsg}</span>
-                </div>
-              )}
-
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', background: 'var(--bg-primary)', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid var(--border-subtle)' }}>
-                💡 Create a fine-grained token at <strong>github.com/settings/tokens</strong> with `read:user` and `gist` access.
-              </div>
-
-              <button type="submit" className="btn btn-primary" disabled={isSubmitting} style={{ width: '100%' }}>
-                {isSubmitting ? 'Authenticating...' : 'Sign In with GitHub'}
+              {/* 1-Click GitHub SSO Button */}
+              <button
+                className="btn btn-primary"
+                onClick={() => initiateGithubOAuth()}
+                style={{
+                  width: '100%',
+                  padding: '0.85rem 1rem',
+                  fontSize: '1rem',
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justify: 'center',
+                  gap: '0.6rem',
+                  borderRadius: '0.6rem',
+                  boxShadow: 'var(--shadow-md)',
+                }}
+              >
+                <GithubIcon size={22} color="#ffffff" />
+                Sign in with GitHub (1-Click SSO)
               </button>
-            </form>
+
+              <div style={{ display: 'flex', alignItems: 'center', margin: '0.5rem 0', color: 'var(--text-dim)', fontSize: '0.75rem' }}>
+                <div style={{ flex: 1, height: '1px', background: 'var(--border-subtle)' }} />
+                <span style={{ padding: '0 0.75rem' }}>OR</span>
+                <div style={{ flex: 1, height: '1px', background: 'var(--border-subtle)' }} />
+              </div>
+
+              {/* Advanced PAT Fallback Toggle */}
+              <div>
+                <button
+                  className="btn"
+                  onClick={() => setShowPatInput(!showPatInput)}
+                  style={{ width: '100%', justifyContent: 'space-between', fontSize: '0.85rem', background: 'var(--bg-tertiary)' }}
+                >
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <Key size={15} color="var(--accent-primary)" /> Advanced: Use Personal Access Token (PAT)
+                  </span>
+                  {showPatInput ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                </button>
+
+                {showPatInput && (
+                  <form onSubmit={handleSubmitPat} style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                    <input
+                      type="password"
+                      className="input-field"
+                      placeholder="Paste ghp_xxxxxxxxxxxxxxxxxxxx"
+                      value={tokenInput}
+                      onChange={(e) => setTokenInput(e.target.value)}
+                      style={{ width: '100%', fontFamily: 'var(--font-mono)' }}
+                      required
+                    />
+
+                    {errorMsg && (
+                      <div style={{ color: 'var(--accent-danger)', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <ShieldAlert size={14} />
+                        <span>{errorMsg}</span>
+                      </div>
+                    )}
+
+                    <button type="submit" className="btn btn-primary" disabled={isSubmitting} style={{ width: '100%', fontSize: '0.85rem' }}>
+                      {isSubmitting ? 'Authenticating...' : 'Sign In with Token'}
+                    </button>
+                  </form>
+                )}
+              </div>
+            </div>
           )}
         </div>
       </div>

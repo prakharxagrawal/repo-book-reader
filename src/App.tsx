@@ -23,6 +23,7 @@ import { fetchRepoDetails, fetchGitTreeItems, fetchFileContent, resolveMarkdownA
 import { buildTocFromGitTree, parseSummaryMd, flattenToc } from './services/tocParser';
 import { exportToPdf, exportToHtml } from './services/exportService';
 import { logUserActivity } from './services/analyticsService';
+import { handleOAuthCodeExchange } from './services/authService';
 
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
@@ -78,6 +79,31 @@ export function App() {
     document.documentElement.setAttribute('data-font', settings.fontFamily);
     document.documentElement.setAttribute('data-size', settings.fontSize);
   }, [settings]);
+
+  // Handle GitHub OAuth Redirect Callback (?code=...)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    if (code) {
+      // Clean up URL code query param
+      const cleanUrl = window.location.origin + window.location.pathname;
+      window.history.replaceState({}, document.title, cleanUrl);
+
+      handleOAuthCodeExchange(code)
+        .then((profile) => {
+          setUserProfile(profile);
+          localStorage.setItem(USER_PROFILE_KEY, JSON.stringify(profile));
+          setSettings((prev) => {
+            const updated = { ...prev, githubPat: profile.token };
+            saveUserSettings(updated);
+            return updated;
+          });
+        })
+        .catch((err) => {
+          console.log('OAuth SSO notice:', err.message);
+        });
+    }
+  }, []);
 
   // Load reading progress, bookmarks, notes whenever repoKey changes
   useEffect(() => {
