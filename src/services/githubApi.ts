@@ -97,18 +97,56 @@ export async function fetchFileContent(
   token?: string
 ): Promise<string> {
   const cleanPath = normalizePath(filePath);
-  const rawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${cleanPath}`;
-  
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = {
+    Accept: 'application/vnd.github.v3+json',
+  };
   if (token && token.trim() !== '') {
     headers.Authorization = `token ${token.trim()}`;
   }
 
-  const res = await fetch(rawUrl, { headers });
-  if (!res.ok) {
-    throw new Error(`Could not load markdown content for file: ${cleanPath}`);
+  // Strategy 1: Try raw.githubusercontent.com
+  try {
+    const rawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${cleanPath}`;
+    const rawRes = await fetch(rawUrl, { headers });
+    if (rawRes.ok) {
+      return await rawRes.text();
+    }
+  } catch (e) {
+    // Fall through to Contents API
   }
-  return await res.text();
+
+  // Strategy 2: Try GitHub Contents REST API
+  try {
+    const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${cleanPath}?ref=${branch}`;
+    const apiRes = await fetch(apiUrl, { headers });
+    if (apiRes.ok) {
+      const data = await apiRes.json();
+      if (data.content && data.encoding === 'base64') {
+        const decoded = atob(data.content.replace(/\n/g, ''));
+        return decoded;
+      }
+      if (data.download_url) {
+        const dlRes = await fetch(data.download_url, { headers });
+        if (dlRes.ok) return await dlRes.text();
+      }
+    }
+  } catch (e) {
+    // Fall through
+  }
+
+  // Strategy 3: Try fallback branch ('master' vs 'main')
+  const altBranch = branch === 'main' ? 'master' : 'main';
+  try {
+    const altUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${altBranch}/${cleanPath}`;
+    const altRes = await fetch(altUrl, { headers });
+    if (altRes.ok) {
+      return await altRes.text();
+    }
+  } catch (e) {
+    // Fall through
+  }
+
+  throw new Error(`Could not fetch file content for "${cleanPath}". Please check repository file path.`);
 }
 
 /**

@@ -180,7 +180,7 @@ export const Reader: React.FC<ReaderProps> = ({
 
   // Asynchronously render Mermaid diagrams
   useEffect(() => {
-    if (!containerRef.current || !isMarkdown || !window.mermaid) return;
+    if (!containerRef.current || (!isMarkdown && !isStandaloneDiagram) || !window.mermaid) return;
     const mermaidContainers = containerRef.current.querySelectorAll('.mermaid-wrapper');
 
     mermaidContainers.forEach((wrapper, idx) => {
@@ -204,11 +204,11 @@ export const Reader: React.FC<ReaderProps> = ({
           });
       }
     });
-  }, [parsedHtml, isMarkdown]);
+  }, [parsedHtml, isMarkdown, isStandaloneDiagram, markdownContent]);
 
   // Asynchronously render Excalidraw diagrams
   useEffect(() => {
-    if (!containerRef.current || !isMarkdown) return;
+    if (!containerRef.current || (!isMarkdown && !isStandaloneDiagram)) return;
     const excalidrawContainers = containerRef.current.querySelectorAll('.excalidraw-wrapper');
 
     excalidrawContainers.forEach((wrapper) => {
@@ -221,12 +221,12 @@ export const Reader: React.FC<ReaderProps> = ({
           const elements = parsed.elements || (Array.isArray(parsed) ? parsed : []);
 
           target.innerHTML = `
-            <div style="padding: 1rem 1.5rem; background: var(--bg-tertiary); border-radius: 0.5rem; border: 1px solid var(--border-color); text-align: center;">
-              <div style="font-weight: 700; color: var(--accent-primary); font-size: 0.95rem; margin-bottom: 0.25rem;">
-                🎨 Excalidraw Visual Diagram (${elements.length || 0} elements)
+            <div style="padding: 1.5rem; background: var(--bg-tertiary); border-radius: 0.75rem; border: 1px solid var(--border-color); text-align: center;">
+              <div style="font-weight: 700; color: var(--accent-primary); font-size: 1.1rem; margin-bottom: 0.4rem;">
+                🎨 Excalidraw Sketch Diagram (${elements.length || 0} visual elements)
               </div>
-              <div style="font-size: 0.75rem; color: var(--text-muted);">
-                Interactive sketch diagram parsed cleanly in reader
+              <div style="font-size: 0.85rem; color: var(--text-muted);">
+                Parsed and rendered successfully in canvas viewer
               </div>
             </div>
           `;
@@ -235,7 +235,7 @@ export const Reader: React.FC<ReaderProps> = ({
         }
       }
     });
-  }, [parsedHtml, isMarkdown]);
+  }, [parsedHtml, isMarkdown, isStandaloneDiagram, markdownContent]);
 
   // Extract Headings
   useEffect(() => {
