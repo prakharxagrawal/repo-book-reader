@@ -20,6 +20,7 @@ import {
 import { HeadingItem, FileCategory } from '../types';
 import { normalizePath } from '../services/githubApi';
 import { renderExcalidrawToSvg } from '../utils/excalidrawSvgRenderer';
+import { InteractiveCanvas } from './InteractiveCanvas';
 
 declare global {
   interface Window {
@@ -494,20 +495,21 @@ export const Reader: React.FC<ReaderProps> = ({
 
       {/* Main Body: Markdown vs Standalone Diagram vs Code Viewer */}
       {isStandaloneDiagram ? (
-        <div ref={containerRef} style={{ padding: '2rem', background: 'var(--bg-secondary)', borderRadius: '0.85rem', border: '1px solid var(--border-color)', boxShadow: 'var(--shadow-md)', textAlign: 'center' }}>
-          <div style={{ fontWeight: 700, fontSize: '1.2rem', color: 'var(--text-main)', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-            <Layers size={22} color="var(--accent-primary)" />
-            <span>Visual Diagram File: {currentPath?.split('/').pop()}</span>
-          </div>
-
+        <div>
           {currentPath?.toLowerCase().endsWith('.mermaid') ? (
             <div className="mermaid-wrapper" data-mermaid={encodeURIComponent(markdownContent)}>
               <div className="mermaid-target">Rendering Mermaid Diagram...</div>
             </div>
           ) : currentPath?.toLowerCase().endsWith('.excalidraw') || currentPath?.toLowerCase().endsWith('.excalidraw.json') ? (
-            <div dangerouslySetInnerHTML={{ __html: renderExcalidrawToSvg(markdownContent) }} />
+            <InteractiveCanvas
+              svgMarkup={renderExcalidrawToSvg(markdownContent)}
+              title={`🎨 Excalidraw Sketch: ${currentPath?.split('/').pop()}`}
+            />
           ) : currentPath?.toLowerCase().endsWith('.svg') ? (
-            <div dangerouslySetInnerHTML={{ __html: markdownContent }} style={{ overflowX: 'auto', padding: '1rem' }} />
+            <InteractiveCanvas
+              svgMarkup={markdownContent}
+              title={`📐 SVG Diagram: ${currentPath?.split('/').pop()}`}
+            />
           ) : (
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.9rem', color: '#e2e8f0', background: '#090d16', padding: '1.5rem', borderRadius: '0.5rem', textAlign: 'left', whiteSpace: 'pre-wrap' }}>
               {markdownContent}

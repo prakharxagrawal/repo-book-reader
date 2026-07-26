@@ -44,8 +44,17 @@ export function renderExcalidrawToSvg(jsonContent: string): string {
       const w = el.width || 0;
       const h = el.height || 0;
 
-      const stroke = el.strokeColor && el.strokeColor !== 'transparent' ? el.strokeColor : '#38bdf8';
-      const fill = el.backgroundColor && el.backgroundColor !== 'transparent' ? el.backgroundColor : 'rgba(56, 189, 248, 0.08)';
+      // Use theme adaptive color defaults if #000000 or default
+      let stroke = el.strokeColor && el.strokeColor !== 'transparent' ? el.strokeColor : 'var(--text-main)';
+      if (stroke === '#000000' || stroke === '#000') {
+        stroke = 'var(--text-main)';
+      }
+
+      let fill = el.backgroundColor && el.backgroundColor !== 'transparent' ? el.backgroundColor : 'rgba(56, 189, 248, 0.1)';
+      if (fill === '#000000' || fill === '#000') {
+        fill = 'var(--bg-tertiary)';
+      }
+
       const strokeWidth = el.strokeWidth || 2;
       const opacity = el.opacity !== undefined ? el.opacity / 100 : 1;
 
@@ -105,24 +114,14 @@ export function renderExcalidrawToSvg(jsonContent: string): string {
     });
 
     return `
-      <div className="excalidraw-canvas-container" style="margin: 1.5rem 0; padding: 1.5rem; background: #090d16; border: 1px solid var(--border-color); border-radius: 0.85rem; overflow-x: auto; box-shadow: var(--shadow-lg); text-align: center;">
-        <div style="font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 1rem; display: flex; alignItems: center; justify-content: space-between;">
-          <span>🎨 Excalidraw Hand-Drawn Sketch Canvas</span>
-          <span>${elements.length} vector elements</span>
-        </div>
-        <svg viewBox="${viewBoxX} ${viewBoxY} ${viewBoxW} ${viewBoxH}" style="width: 100%; max-width: 900px; height: auto; display: block; margin: 0 auto;">
-          <defs>
-            <marker id="excalidraw-arrowhead" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-              <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent-primary)" />
-            </marker>
-            <pattern id="excalidraw-grid" width="20" height="20" patternUnits="userSpaceOnUse">
-              <circle cx="2" cy="2" r="1" fill="rgba(255, 255, 255, 0.05)" />
-            </pattern>
-          </defs>
-          <rect x="${viewBoxX}" y="${viewBoxY}" width="${viewBoxW}" height="${viewBoxH}" fill="url(#excalidraw-grid)" />
-          ${svgItems}
-        </svg>
-      </div>
+      <svg viewBox="${viewBoxX} ${viewBoxY} ${viewBoxW} ${viewBoxH}" style="width: 100%; max-width: 900px; height: auto; display: block; margin: 0 auto;">
+        <defs>
+          <marker id="excalidraw-arrowhead" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent-primary)" />
+          </marker>
+        </defs>
+        ${svgItems}
+      </svg>
     `;
   } catch (e: any) {
     return `<div style="padding: 1.5rem; color: var(--accent-danger); background: rgba(239, 68, 68, 0.1); border-radius: 0.5rem; border: 1px solid var(--accent-danger);">Excalidraw SVG Render Error: ${e.message}</div>`;
