@@ -2,6 +2,9 @@ import { UserActivityLog, AdminAnalytics, UserProfile } from '../types';
 
 const LOCAL_LOGS_KEY = 'gitbookify_analytics_logs_v1';
 const GIST_ID_KEY = 'gitbookify_analytics_gist_id';
+const USER_PROFILE_KEY = 'gitbookify_user_profile_v1';
+
+let autoSyncTimer: any = null;
 
 export function logUserActivity(
   username: string,
@@ -25,9 +28,32 @@ export function logUserActivity(
     // Keep last 200 logs locally
     const updated = [newLog, ...existing].slice(0, 200);
     localStorage.setItem(LOCAL_LOGS_KEY, JSON.stringify(updated));
+
+    // Debounced automatic background sync to Gist
+    scheduleAutoSync();
   } catch (e) {
     console.error('Error logging user activity', e);
   }
+}
+
+function scheduleAutoSync(): void {
+  if (autoSyncTimer) clearTimeout(autoSyncTimer);
+
+  autoSyncTimer = setTimeout(() => {
+    try {
+      const rawProfile = localStorage.getItem(USER_PROFILE_KEY);
+      if (rawProfile) {
+        const profile: UserProfile = JSON.parse(rawProfile);
+        if (profile.token) {
+          syncAnalyticsToGist(profile.token).catch((err) => {
+            console.log('Background auto-sync note:', err.message);
+          });
+        }
+      }
+    } catch (e) {
+      // Ignore background sync errors silently
+    }
+  }, 10000); // Auto-sync 10 seconds after user activity
 }
 
 export function loadLocalAnalytics(): AdminAnalytics {
