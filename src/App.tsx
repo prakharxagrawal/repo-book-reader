@@ -518,15 +518,12 @@ export function App() {
         onClose={() => setIsNotesOpen(false)}
         bookmarks={bookmarks}
         notes={notes}
-        currentPath={activeNode?.path || null}
-        currentChapterTitle={activeNode?.title || ''}
-        onSelectChapter={(path) => {
-          const target = flatNodes.find((n) => n.path === path);
-          if (target) setActiveNode(target);
-        }}
-        onDeleteBookmark={handleDeleteBookmark}
-        onSaveNote={handleSaveNote}
+        currentPath={activeNode?.path || ''}
+        chapterTitle={activeNode?.title || ''}
+        repoKey={repoKey}
+        onAddNote={handleSaveNote}
         onDeleteNote={handleDeleteNote}
+        onDeleteBookmark={handleDeleteBookmark}
       />
     </div>
   );
