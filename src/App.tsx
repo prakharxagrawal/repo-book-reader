@@ -1,0 +1,365 @@
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import {
+  RepoInfo,
+  TocNode,
+  HeadingItem,
+  UserSettings,
+  ReadingState,
+  Bookmark,
+  UserNote,
+} from './types';
+import {
+  loadUserSettings,
+  saveUserSettings,
+  loadReadingState,
+  saveReadingState,
+  loadBookmarks,
+  saveBookmarks,
+  loadUserNotes,
+  saveUserNotes,
+} from './services/storage'; // Wait, storage is under services or root? Let's check storage path
+import { fetchRepoDetails, fetchGitTreeItems, fetchFileContent, resolveMarkdownAssetUrls } from './services/githubApi';
+import { buildTocFromGitTree, parseSummaryMd, flattenToc } from './services/tocParser';
+import { exportToPdf, exportToHtml } from './services/exportService';
+import { Header } from './components/Header';
+import { Sidebar } from './components/Sidebar';
+import { Reader } from './components/Reader';
+import { OnPageToc } from './components/OnPageToc';
+import { SearchModal } from './components/SearchModal';
+import { SettingsModal } from './components/SettingsModal';
+import { NotesDrawer } from './components/NotesDrawer';
+import { PRESET_REPOSITORIES } from './data/presets';
+
+export function App() {
+  const [settings, setSettings] = useState<UserSettings>(() => loadUserSettings());
+  const [repoInfo, setRepoInfo] = useState<RepoInfo | null>(null);
+  const [toc, setToc] = useState<TocNode[]>([]);
+  const [activeNode, setActiveNode] = useState<TocNode | null>(null);
+  const [markdownContent, setMarkdownContent] = useState<string>('');
+  const [headings, setHeadings] = useState<HeadingItem[]>([]);
+  
+  const [isTreeLoading, setIsTreeLoading] = useState<boolean>(false);
+  const [isContentLoading, setIsContentLoading] = useState<boolean>(false);
+
+  // Modals state
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isNotesOpen, setIsNotesOpen] = useState(false);
+
+  // Reading state & bookmarks
+  const repoKey = repoInfo ? `${repoInfo.owner}_${repoInfo.repo}` : 'default';
+  const [readingState, setReadingState] = useState<ReadingState>({ completedPaths: [], lastReadPath: null, scrollPositions: {} });
+  const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
+  const [notes, setNotes] = useState<UserNote[]>([]);
+
+  // Apply theme & font settings to html/body
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', settings.theme);
+    document.documentElement.setAttribute('data-font', settings.fontFamily);
+    document.documentElement.setAttribute('data-size', settings.fontSize);
+  }, [settings]);
+
+  // Load reading progress, bookmarks, notes whenever repoKey changes
+  useEffect(() => {
+    if (!repoInfo) return;
+    const rState = loadReadingState(repoKey);
+    setReadingState(rState);
+    setBookmarks(loadBookmarks(repoKey));
+    setNotes(loadUserNotes(repoKey));
+  }, [repoKey, repoInfo]);
+
+  // Load a repository by owner and repo
+  const loadRepository = useCallback(
+    async (owner: string, repo: string) => {
+      setIsTreeLoading(true);
+      setMarkdownContent('');
+      setActiveNode(null);
+      setToc([]);
+
+      try {
+        const repoDetails = await fetchRepoDetails(owner, repo, settings.githubPat);
+        setRepoInfo(repoDetails);
+
+        const treeItems = await fetchGitTreeItems(
+          owner,
+          repo,
+          repoDetails.branch,
+          settings.githubPat
+        );
+
+        // Check for SUMMARY.md first
+        const summaryFile = treeItems.find((item) => item.path.toLowerCase() === 'summary.md');
+        let generatedToc: TocNode[] = [];
+
+        if (summaryFile) {
+          try {
+            const summaryText = await fetchFileContent(
+              owner,
+              repo,
+              repoDetails.branch,
+              summaryFile.path,
+              settings.githubPat
+            );
+            generatedToc = parseSummaryMd(summaryText);
+          } catch (e) {
+            generatedToc = buildTocFromGitTree(treeItems);
+          }
+        } else {
+          generatedToc = buildTocFromGitTree(treeItems);
+        }
+
+        setToc(generatedToc);
+
+        // Select first chapter automatically or last read path
+        const flat = flattenToc(generatedToc);
+        if (flat.length > 0) {
+          const savedProgress = loadReadingState(`${owner}_${repo}`);
+          const targetNode =
+            flat.find((n) => n.path === savedProgress.lastReadPath) || flat[0];
+          
+          setActiveNode(targetNode);
+        }
+      } catch (err: any) {
+        console.error('Error loading repository:', err);
+        alert(err.message || 'Failed to load GitHub repository');
+      } finally {
+        setIsTreeLoading(false);
+      }
+    },
+    [settings.githubPat]
+  );
+
+  // Load initial preset repo on mount
+  useEffect(() => {
+    const defaultPreset = PRESET_REPOSITORIES[0];
+    loadRepository(defaultPreset.owner, defaultPreset.repo);
+  }, []);
+
+  // Fetch content whenever activeNode changes
+  useEffect(() => {
+    if (!repoInfo || !activeNode) return;
+
+    let isMounted = true;
+    setIsContentLoading(true);
+
+    fetchFileContent(
+      repoInfo.owner,
+      repoInfo.repo,
+      repoInfo.branch,
+      activeNode.path,
+      settings.githubPat
+    )
+      .then((rawMd) => {
+        if (!isMounted) return;
+        const resolved = resolveMarkdownAssetUrls(
+          rawMd,
+          repoInfo.owner,
+          repoInfo.repo,
+          repoInfo.branch,
+          activeNode.path
+        );
+        setMarkdownContent(resolved);
+
+        // Save last read path
+        setReadingState((prev) => {
+          const updated = { ...prev, lastReadPath: activeNode.path };
+          saveReadingState(repoKey, updated);
+          return updated;
+        });
+      })
+      .catch((err) => {
+        if (!isMounted) return;
+        setMarkdownContent(`# Error Loading Chapter\n\nCould not fetch content for \`${activeNode.path}\`. ${err.message}`);
+      })
+      .finally(() => {
+        if (isMounted) setIsContentLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeNode, repoInfo, settings.githubPat, repoKey]);
+
+  const handleUpdateSettings = (newSet: Partial<UserSettings>) => {
+    setSettings((prev) => {
+      const updated = { ...prev, ...newSet };
+      saveUserSettings(updated);
+      return updated;
+    });
+  };
+
+  const handleToggleComplete = (path: string) => {
+    setReadingState((prev) => {
+      const isComp = prev.completedPaths.includes(path);
+      const nextCompleted = isComp
+        ? prev.completedPaths.filter((p) => p !== path)
+        : [...prev.completedPaths, path];
+
+      const updated = { ...prev, completedPaths: nextCompleted };
+      saveReadingState(repoKey, updated);
+      return updated;
+    });
+  };
+
+  const handleAddBookmark = (snippet: string) => {
+    if (!activeNode) return;
+    const newBookmark: Bookmark = {
+      id: Date.now().toString(),
+      repoKey,
+      path: activeNode.path,
+      chapterTitle: activeNode.title,
+      snippet: snippet.replace(/\n+/g, ' ').substring(0, 150),
+      createdAt: Date.now(),
+    };
+    const updated = [newBookmark, ...bookmarks];
+    setBookmarks(updated);
+    saveBookmarks(repoKey, updated);
+    setIsNotesOpen(true);
+  };
+
+  const handleDeleteBookmark = (id: string) => {
+    const updated = bookmarks.filter((b) => b.id !== id);
+    setBookmarks(updated);
+    saveBookmarks(repoKey, updated);
+  };
+
+  const handleSaveNote = (text: string) => {
+    if (!activeNode) return;
+    const newNote: UserNote = {
+      id: Date.now().toString(),
+      repoKey,
+      path: activeNode.path,
+      chapterTitle: activeNode.title,
+      text,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    const updated = [newNote, ...notes];
+    setNotes(updated);
+    saveUserNotes(repoKey, updated);
+  };
+
+  const handleDeleteNote = (id: string) => {
+    const updated = notes.filter((n) => n.id !== id);
+    setNotes(updated);
+    saveUserNotes(repoKey, updated);
+  };
+
+  // Prev / Next Chapter Navigation
+  const flatNodes = useMemo(() => flattenToc(toc), [toc]);
+  const currentIndex = activeNode ? flatNodes.findIndex((n) => n.path === activeNode.path) : -1;
+
+  const hasPrev = currentIndex > 0;
+  const hasNext = currentIndex >= 0 && currentIndex < flatNodes.length - 1;
+
+  const handleNavigatePrev = () => {
+    if (hasPrev) setActiveNode(flatNodes[currentIndex - 1]);
+  };
+
+  const handleNavigateNext = () => {
+    if (hasNext) setActiveNode(flatNodes[currentIndex + 1]);
+  };
+
+  const handleNavigateToPath = (targetPath: string) => {
+    const flat = flattenToc(toc);
+    const targetNode = flat.find(
+      (n) => n.path.toLowerCase() === targetPath.toLowerCase() || n.path.toLowerCase().endsWith(targetPath.toLowerCase())
+    );
+    if (targetNode) {
+      setActiveNode(targetNode);
+    } else {
+      setActiveNode({
+        id: targetPath,
+        title: targetPath.split('/').pop() || targetPath,
+        path: targetPath,
+        type: 'chapter',
+        level: 1,
+      });
+    }
+  };
+
+  return (
+    <div className="app-container">
+      {/* Top Header */}
+      <Header
+        repoInfo={repoInfo}
+        settings={settings}
+        onUpdateSettings={handleUpdateSettings}
+        onSelectRepo={(owner, repo) => loadRepository(owner, repo)}
+        onOpenSearch={() => setIsSearchOpen(true)}
+        onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenNotes={() => setIsNotesOpen(true)}
+        onExportPdf={exportToPdf}
+        onExportHtml={() => exportToHtml(repoInfo, activeNode?.title || 'Chapter', markdownContent)}
+        bookmarksCount={bookmarks.length}
+        notesCount={notes.length}
+      />
+
+      {/* Main Reader Layout Grid */}
+      <div className="main-layout">
+        {/* Left Sidebar Chapter Tree */}
+        <Sidebar
+          toc={toc}
+          activePath={activeNode?.path || null}
+          completedPaths={readingState.completedPaths}
+          onSelectNode={(node) => setActiveNode(node)}
+          onToggleComplete={handleToggleComplete}
+          isLoading={isTreeLoading}
+        />
+
+        {/* Center Chapter Reader */}
+        <Reader
+          currentPath={activeNode?.path || null}
+          chapterTitle={activeNode?.title || ''}
+          markdownContent={markdownContent}
+          isLoading={isContentLoading}
+          isCompleted={activeNode ? readingState.completedPaths.includes(activeNode.path) : false}
+          onToggleComplete={handleToggleComplete}
+          onAddBookmark={handleAddBookmark}
+          onNavigatePrev={handleNavigatePrev}
+          onNavigateNext={handleNavigateNext}
+          hasPrev={hasPrev}
+          hasNext={hasNext}
+          onHeadingsExtracted={(hList) => setHeadings(hList)}
+          onNavigateToPath={handleNavigateToPath}
+        />
+
+        {/* Right OnPage Table of Contents Outline */}
+        <OnPageToc headings={headings} />
+      </div>
+
+      {/* Modals & Drawers */}
+      <SearchModal
+        isOpen={isSearchOpen}
+        onClose={() => setIsSearchOpen(false)}
+        toc={toc}
+        onSelectNode={(node) => setActiveNode(node)}
+      />
+
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        settings={settings}
+        onUpdateSettings={handleUpdateSettings}
+      />
+
+      <NotesDrawer
+        isOpen={isNotesOpen}
+        onClose={() => setIsNotesOpen(false)}
+        bookmarks={bookmarks}
+        notes={notes}
+        currentPath={activeNode?.path || null}
+        currentChapterTitle={activeNode?.title || ''}
+        onSelectChapter={(path) => {
+          const target = flatNodes.find((n) => n.path === path);
+          if (target) setActiveNode(target);
+        }}
+        onDeleteBookmark={handleDeleteBookmark}
+        onSaveNote={handleSaveNote}
+        onDeleteNote={handleDeleteNote}
+      />
+    </div>
+  );
+}
+
+export default App;

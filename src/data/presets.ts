@@ -1,0 +1,48 @@
+import { PresetRepo } from '../types';
+
+export const PRESET_REPOSITORIES: PresetRepo[] = [
+  {
+    id: 'karanpratapsingh-system-design',
+    name: 'System Design Course',
+    owner: 'karanpratapsingh',
+    repo: 'system-design',
+    branch: 'main',
+    description: 'Comprehensive System Design course with diagrams, HLD/LLD patterns, and interview preparation.',
+    starsBadge: '25k+ Stars',
+    category: 'System Design',
+    sampleToc: [],
+  },
+  {
+    id: 'donnemartin-system-design-primer',
+    name: 'System Design Primer',
+    owner: 'donnemartin',
+    repo: 'system-design-primer',
+    branch: 'master',
+    description: 'An organized guide to learning how to design large-scale systems at scale.',
+    starsBadge: '260k+ Stars',
+    category: 'System Design',
+    sampleToc: [],
+  },
+  {
+    id: 'jwasham-coding-interview-university',
+    name: 'Coding Interview University',
+    owner: 'jwasham',
+    repo: 'coding-interview-university',
+    branch: 'main',
+    description: 'Complete computer science study plan for software engineering interview preparation.',
+    starsBadge: '300k+ Stars',
+    category: 'Computer Science',
+    sampleToc: [],
+  },
+  {
+    id: 'developer-roadmap',
+    name: 'Developer Roadmaps',
+    owner: 'kamranahmedse',
+    repo: 'developer-roadmap',
+    branch: 'main',
+    description: 'Community driven roadmaps, articles and resources for developer career tracks.',
+    starsBadge: '280k+ Stars',
+    category: 'Career & Architecture',
+    sampleToc: [],
+  },
+];
