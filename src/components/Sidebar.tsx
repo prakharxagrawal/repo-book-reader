@@ -121,20 +121,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return (
       <div key={node.id} style={{ marginLeft: `${(node.level - 1) * 10}px` }}>
         <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '0.38rem 0.6rem',
-            borderRadius: '0.45rem',
-            margin: '0.12rem 0',
-            cursor: 'pointer',
-            background: isActive ? 'var(--bg-tertiary)' : 'transparent',
-            borderLeft: isActive ? '3px solid var(--accent-primary)' : '3px solid transparent',
-            color: isActive ? 'var(--accent-primary)' : 'var(--text-main)',
-            fontWeight: isActive ? 600 : 400,
-            transition: 'all 0.15s ease',
-          }}
+          className={`sidebar-item ${isActive ? 'sidebar-item-active' : ''}`}
           onClick={() => {
             if (isFolder) {
               toggleFolder(node.id);
