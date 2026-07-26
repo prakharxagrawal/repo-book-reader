@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { X, Key, CheckCircle, LogOut, ShieldAlert, User, ChevronDown, ChevronUp } from 'lucide-react';
+import { X, Key, CheckCircle, LogOut, ShieldAlert, User, ChevronDown, ChevronUp, Settings2 } from 'lucide-react';
 import { UserProfile } from '../types';
-import { initiateGithubOAuth } from '../services/authService';
+import { initiateGithubOAuth, getOAuthClientId, saveOAuthClientId } from '../services/authService';
 
 const GithubIcon: React.FC<{ size?: number; color?: string }> = ({ size = 20, color = 'currentColor' }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -26,11 +26,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onLogout,
 }) => {
   const [tokenInput, setTokenInput] = useState('');
+  const [clientIdInput, setClientIdInput] = useState(() => getOAuthClientId());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [showPatInput, setShowPatInput] = useState(false);
+  const [showConfig, setShowConfig] = useState(false);
 
   if (!isOpen) return null;
+
+  const handleStartOAuth = () => {
+    saveOAuthClientId(clientIdInput);
+    initiateGithubOAuth(clientIdInput);
+  };
 
   const handleSubmitPat = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -121,7 +128,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               {/* 1-Click GitHub SSO Button */}
               <button
                 className="btn btn-primary"
-                onClick={() => initiateGithubOAuth()}
+                onClick={handleStartOAuth}
                 style={{
                   width: '100%',
                   padding: '0.85rem 1rem',
@@ -139,7 +146,41 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 Sign in with GitHub (1-Click SSO)
               </button>
 
-              <div style={{ display: 'flex', alignItems: 'center', margin: '0.5rem 0', color: 'var(--text-dim)', fontSize: '0.75rem' }}>
+              {/* OAuth App Client ID Config toggle */}
+              <div style={{ textAlign: 'center' }}>
+                <button
+                  className="btn"
+                  onClick={() => setShowConfig(!showConfig)}
+                  style={{ fontSize: '0.75rem', color: 'var(--text-dim)', background: 'transparent', border: 'none', padding: '0.2rem' }}
+                >
+                  <Settings2 size={13} style={{ marginRight: '0.3rem' }} />
+                  {showConfig ? 'Hide OAuth App Configuration' : 'Configure Custom GitHub OAuth Client ID'}
+                </button>
+
+                {showConfig && (
+                  <div style={{ marginTop: '0.75rem', padding: '0.85rem', background: 'var(--bg-tertiary)', borderRadius: '0.5rem', border: '1px solid var(--border-subtle)', textAlign: 'left' }}>
+                    <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: '0.3rem' }}>
+                      GitHub OAuth App Client ID:
+                    </label>
+                    <input
+                      type="text"
+                      className="input-field"
+                      placeholder="e.g. Ov23li1234567890"
+                      value={clientIdInput}
+                      onChange={(e) => {
+                        setClientIdInput(e.target.value);
+                        saveOAuthClientId(e.target.value);
+                      }}
+                      style={{ width: '100%', fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}
+                    />
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', marginTop: '0.4rem', lineHeight: 1.4 }}>
+                      💡 To use your own OAuth App, go to <strong>GitHub Settings &gt; Developer settings &gt; OAuth Apps</strong> and set Callback URL to `https://prakharxagrawal.github.io/repo-book-reader/`.
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', margin: '0.2rem 0', color: 'var(--text-dim)', fontSize: '0.75rem' }}>
                 <div style={{ flex: 1, height: '1px', background: 'var(--border-subtle)' }} />
                 <span style={{ padding: '0 0.75rem' }}>OR</span>
                 <div style={{ flex: 1, height: '1px', background: 'var(--border-subtle)' }} />
@@ -153,7 +194,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   style={{ width: '100%', justifyContent: 'space-between', fontSize: '0.85rem', background: 'var(--bg-tertiary)' }}
                 >
                   <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                    <Key size={15} color="var(--accent-primary)" /> Advanced: Use Personal Access Token (PAT)
+                    <Key size={15} color="var(--accent-primary)" /> Use Personal Access Token (PAT)
                   </span>
                   {showPatInput ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                 </button>

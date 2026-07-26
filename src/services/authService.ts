@@ -1,14 +1,23 @@
 import { UserProfile } from '../types';
 
-// Default OAuth Client ID for GitHub SSO (or user provided app)
-const GITHUB_OAUTH_CLIENT_ID = 'Ov23liXXXXXXXXXXXXXX'; 
+const CLIENT_ID_KEY = 'gitbookify_oauth_client_id';
+const DEFAULT_CLIENT_ID = 'Ov23liXXXXXXXXXXXXXX';
 const GITHUB_GATEKEEPER_URL = 'https://gatekeeper-gitbookify.vercel.app/authenticate';
 
-export function initiateGithubOAuth(): void {
+export function getOAuthClientId(): string {
+  return localStorage.getItem(CLIENT_ID_KEY) || DEFAULT_CLIENT_ID;
+}
+
+export function saveOAuthClientId(clientId: string): void {
+  localStorage.setItem(CLIENT_ID_KEY, clientId.trim());
+}
+
+export function initiateGithubOAuth(overrideClientId?: string): void {
+  const clientId = (overrideClientId || getOAuthClientId()).trim();
   const redirectUri = window.location.origin + window.location.pathname;
   const scope = 'read:user gist';
 
-  const oauthUrl = `https://github.com/login/oauth/authorize?client_id=${GITHUB_OAUTH_CLIENT_ID}&scope=${encodeURIComponent(
+  const oauthUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&scope=${encodeURIComponent(
     scope
   )}&redirect_uri=${encodeURIComponent(redirectUri)}`;
 
@@ -50,7 +59,6 @@ export async function handleOAuthCodeExchange(code: string): Promise<UserProfile
     }
     return await fetchUserProfile(data.token);
   } catch (err) {
-    // If gatekeeper proxy is unavailable, prompt fallback
     throw err;
   }
 }
