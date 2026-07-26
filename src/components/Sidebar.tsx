@@ -13,6 +13,7 @@ import {
   Image,
   Database,
   File,
+  Layers,
 } from 'lucide-react';
 import { TocNode } from '../types';
 
@@ -71,6 +72,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       ) : (
         <Folder size={16} color="var(--accent-primary)" />
       );
+    }
+
+    const ext = node.extension || (node.path ? node.path.split('.').pop()?.toLowerCase() || '' : '');
+    const isDiagram = ['excalidraw', 'mermaid', 'puml', 'plantuml', 'drawio', 'svg'].includes(ext) || node.path.toLowerCase().endsWith('.excalidraw.json');
+
+    if (isDiagram) {
+      return <Layers size={15} color="#ec4899" />;
     }
 
     const cat = node.fileCategory || 'other';

@@ -178,10 +178,21 @@ export function App() {
           settings.githubPat
         );
 
-        // Filter strictly for markdown files (.md, .mdx)
-        const mdTreeItems = treeItems.filter(
-          (item) => item.type === 'tree' || item.path.toLowerCase().endsWith('.md') || item.path.toLowerCase().endsWith('.mdx')
-        );
+        // Filter for markdown files and standalone diagram files (.excalidraw, .mermaid, .puml, .svg)
+        const mdTreeItems = treeItems.filter((item) => {
+          const p = item.path.toLowerCase();
+          return (
+            item.type === 'tree' ||
+            p.endsWith('.md') ||
+            p.endsWith('.mdx') ||
+            p.endsWith('.excalidraw') ||
+            p.endsWith('.excalidraw.json') ||
+            p.endsWith('.mermaid') ||
+            p.endsWith('.puml') ||
+            p.endsWith('.plantuml') ||
+            p.endsWith('.svg')
+          );
+        });
 
         // Check for SUMMARY.md first
         const summaryFile = treeItems.find((item) => item.path.toLowerCase() === 'summary.md');

@@ -15,6 +15,7 @@ import {
   Code2,
   Play,
   Terminal,
+  Layers,
 } from 'lucide-react';
 import { HeadingItem, FileCategory } from '../types';
 import { normalizePath } from '../services/githubApi';
@@ -64,6 +65,14 @@ export const Reader: React.FC<ReaderProps> = ({
   const [copiedCode, setCopiedCode] = useState(false);
 
   const isMarkdown = fileCategory === 'markdown' || (currentPath && currentPath.toLowerCase().endsWith('.md'));
+  const isStandaloneDiagram = !!(currentPath && (
+    currentPath.toLowerCase().endsWith('.excalidraw') ||
+    currentPath.toLowerCase().endsWith('.excalidraw.json') ||
+    currentPath.toLowerCase().endsWith('.mermaid') ||
+    currentPath.toLowerCase().endsWith('.puml') ||
+    currentPath.toLowerCase().endsWith('.plantuml') ||
+    currentPath.toLowerCase().endsWith('.svg')
+  ));
 
   // Initialize Mermaid
   useEffect(() => {
@@ -494,8 +503,31 @@ export const Reader: React.FC<ReaderProps> = ({
         </div>
       </div>
 
-      {/* Main Body: Markdown vs Code Viewer */}
-      {isMarkdown ? (
+      {/* Main Body: Markdown vs Standalone Diagram vs Code Viewer */}
+      {isStandaloneDiagram ? (
+        <div ref={containerRef} style={{ padding: '2rem', background: 'var(--bg-secondary)', borderRadius: '0.85rem', border: '1px solid var(--border-color)', boxShadow: 'var(--shadow-md)', textAlign: 'center' }}>
+          <div style={{ fontWeight: 700, fontSize: '1.2rem', color: 'var(--accent-primary)', marginBottom: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+            <Layers size={22} />
+            <span>Visual Diagram File: {currentPath?.split('/').pop()}</span>
+          </div>
+
+          {currentPath?.toLowerCase().endsWith('.mermaid') ? (
+            <div className="mermaid-wrapper" data-mermaid={encodeURIComponent(markdownContent)}>
+              <div className="mermaid-target">Rendering Mermaid Diagram...</div>
+            </div>
+          ) : currentPath?.toLowerCase().endsWith('.excalidraw') || currentPath?.toLowerCase().endsWith('.excalidraw.json') ? (
+            <div className="excalidraw-wrapper" data-excalidraw={encodeURIComponent(markdownContent)}>
+              <div className="excalidraw-target">Rendering Excalidraw Sketch...</div>
+            </div>
+          ) : currentPath?.toLowerCase().endsWith('.svg') ? (
+            <div dangerouslySetInnerHTML={{ __html: markdownContent }} style={{ overflowX: 'auto', padding: '1rem' }} />
+          ) : (
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.9rem', color: '#e2e8f0', background: '#090d16', padding: '1.5rem', borderRadius: '0.5rem', textAlign: 'left', whiteSpace: 'pre-wrap' }}>
+              {markdownContent}
+            </div>
+          )}
+        </div>
+      ) : isMarkdown ? (
         <div ref={containerRef} className="markdown-body" dangerouslySetInnerHTML={{ __html: parsedHtml }} />
       ) : (
         <div ref={containerRef} className="code-viewer-container">

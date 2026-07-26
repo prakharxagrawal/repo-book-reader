@@ -4,6 +4,11 @@ import { GitTreeItem, normalizePath } from './githubApi';
 export function detectFileCategory(path: string): { category: FileCategory; language: string; extension: string } {
   const ext = path.includes('.') ? path.split('.').pop()?.toLowerCase() || '' : '';
 
+  const diagramExts = ['excalidraw', 'mermaid', 'puml', 'plantuml', 'drawio'];
+  if (diagramExts.includes(ext) || path.toLowerCase().endsWith('.excalidraw.json')) {
+    return { category: 'other', language: ext || 'diagram', extension: ext };
+  }
+
   if (['md', 'markdown', 'mdown', 'mdx'].includes(ext)) {
     return { category: 'markdown', language: 'markdown', extension: ext };
   }
@@ -125,8 +130,11 @@ export function buildTocFromGitTree(treeItems: GitTreeItem[]): TocNode[] {
   // Exclude unwanted git metadata or heavy build artifacts
   const filteredFiles = treeItems.filter((item) => {
     const p = item.path.toLowerCase();
+    const isMd = p.endsWith('.md') || p.endsWith('.mdx');
+    const isDiagram = p.endsWith('.excalidraw') || p.endsWith('.excalidraw.json') || p.endsWith('.mermaid') || p.endsWith('.puml') || p.endsWith('.plantuml') || p.endsWith('.svg');
     return (
       item.type === 'blob' &&
+      (isMd || isDiagram || p.includes('docs/')) &&
       !p.startsWith('.git/') &&
       !p.startsWith('node_modules/') &&
       !p.startsWith('dist/') &&
