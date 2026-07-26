@@ -8,8 +8,11 @@ import {
   Folder,
   FolderOpen,
   Filter,
-  CheckSquare,
-  BookOpen,
+  Code2,
+  FileCode,
+  Image,
+  Database,
+  File,
 } from 'lucide-react';
 import { TocNode } from '../types';
 
@@ -40,13 +43,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }));
   };
 
-  // Count overall completed markdown files
-  const countMarkdownFiles = (nodes: TocNode[]): { total: number; completed: number } => {
+  const countFiles = (nodes: TocNode[]): { total: number; completed: number } => {
     let total = 0;
     let completed = 0;
     function traverse(list: TocNode[]) {
       for (const item of list) {
-        if (item.path.endsWith('.md')) {
+        if (item.path && item.type !== 'folder') {
           total++;
           if (completedPaths.includes(item.path)) {
             completed++;
@@ -59,8 +61,32 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return { total, completed };
   };
 
-  const { total, completed } = countMarkdownFiles(toc);
+  const { total, completed } = countFiles(toc);
   const percentComplete = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+  const renderFileIcon = (node: TocNode) => {
+    if (node.type === 'folder') {
+      return expandedFolders[node.id] !== false ? (
+        <FolderOpen size={16} color="var(--accent-primary)" />
+      ) : (
+        <Folder size={16} color="var(--accent-primary)" />
+      );
+    }
+
+    const cat = node.fileCategory || 'other';
+    switch (cat) {
+      case 'markdown':
+        return <FileText size={15} color="var(--accent-primary)" />;
+      case 'code':
+        return <Code2 size={15} color="#818cf8" />;
+      case 'image':
+        return <Image size={15} color="#f59e0b" />;
+      case 'data':
+        return <Database size={15} color="#10b981" />;
+      default:
+        return <File size={15} color="var(--text-muted)" />;
+    }
+  };
 
   const renderTocItem = (node: TocNode) => {
     const isFolder = node.children && node.children.length > 0;
@@ -72,6 +98,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     if (filterQuery.trim()) {
       const matchQuery = (n: TocNode): boolean => {
         if (n.title.toLowerCase().includes(filterQuery.toLowerCase())) return true;
+        if (n.path.toLowerCase().includes(filterQuery.toLowerCase())) return true;
         if (n.children && n.children.some(matchQuery)) return true;
         return false;
       };
@@ -79,15 +106,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
 
     return (
-      <div key={node.id} style={{ marginLeft: `${(node.level - 1) * 12}px` }}>
+      <div key={node.id} style={{ marginLeft: `${(node.level - 1) * 10}px` }}>
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            padding: '0.4rem 0.6rem',
-            borderRadius: '0.5rem',
-            margin: '0.15rem 0',
+            padding: '0.38rem 0.6rem',
+            borderRadius: '0.45rem',
+            margin: '0.12rem 0',
             cursor: 'pointer',
             background: isActive ? 'var(--bg-tertiary)' : 'transparent',
             borderLeft: isActive ? '3px solid var(--accent-primary)' : '3px solid transparent',
@@ -102,35 +129,33 @@ export const Sidebar: React.FC<SidebarProps> = ({
               if (readmeChild) {
                 onSelectNode(readmeChild);
               }
-            } else if (node.path.endsWith('.md')) {
+            } else {
               onSelectNode(node);
             }
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, overflow: 'hidden' }}>
-            {isFolder ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flex: 1, overflow: 'hidden' }}>
+            {isFolder && (
               <span style={{ display: 'flex', color: 'var(--text-dim)' }}>
-                {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-              </span>
-            ) : (
-              <span style={{ display: 'flex', color: 'var(--text-muted)' }}>
-                <FileText size={15} />
+                {isExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
               </span>
             )}
+            <span style={{ display: 'flex', alignItems: 'center' }}>{renderFileIcon(node)}</span>
             <span
               style={{
-                fontSize: '0.875rem',
+                fontSize: '0.85rem',
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
+                fontFamily: node.type !== 'folder' && node.fileCategory === 'code' ? 'var(--font-mono)' : 'var(--font-sans)',
               }}
-              title={node.title}
+              title={node.path}
             >
               {node.title}
             </span>
           </div>
 
-          {node.path.endsWith('.md') && (
+          {node.type !== 'folder' && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -147,7 +172,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               }}
               title={isCompleted ? 'Mark as unread' : 'Mark as read'}
             >
-              {isCompleted ? <CheckCircle size={15} /> : <Circle size={15} />}
+              {isCompleted ? <CheckCircle size={14} /> : <Circle size={14} />}
             </button>
           )}
         </div>
@@ -180,7 +205,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <Filter size={14} color="var(--text-dim)" />
           <input
             type="text"
-            placeholder="Filter chapters..."
+            placeholder="Filter repo files & chapters..."
             value={filterQuery}
             onChange={(e) => setFilterQuery(e.target.value)}
             style={{
@@ -215,7 +240,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </div>
 
-      {/* Chapter Tree Container */}
+      {/* Chapter & Code Tree Container */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '0.75rem 0.5rem' }}>
         {isLoading ? (
           <div style={{ padding: '2rem 1rem', textAlign: 'center', color: 'var(--text-dim)', fontSize: '0.875rem' }}>
@@ -223,7 +248,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         ) : toc.length === 0 ? (
           <div style={{ padding: '2rem 1rem', textAlign: 'center', color: 'var(--text-dim)', fontSize: '0.875rem' }}>
-            No chapters found in this repo.
+            No files found in this repo.
           </div>
         ) : (
           toc.map((node) => renderTocItem(node))

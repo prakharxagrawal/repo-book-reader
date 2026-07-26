@@ -20,6 +20,7 @@ interface HeaderProps {
   settings: UserSettings;
   onUpdateSettings: (newSettings: Partial<UserSettings>) => void;
   onSelectRepo: (owner: string, repo: string) => void;
+  onGoHome?: () => void;
   onOpenSearch: () => void;
   onOpenSettings: () => void;
   onOpenNotes: () => void;
@@ -34,6 +35,7 @@ export const Header: React.FC<HeaderProps> = ({
   settings,
   onUpdateSettings,
   onSelectRepo,
+  onGoHome,
   onOpenSearch,
   onOpenSettings,
   onOpenNotes,
@@ -82,7 +84,11 @@ export const Header: React.FC<HeaderProps> = ({
     <header className="header-container glass-panel" style={{ height: 'var(--header-height)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 1.25rem', borderBottom: '1px solid var(--border-color)', zIndex: 100 }}>
       {/* Brand & Repo Picker */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontWeight: 700, fontSize: '1.2rem', color: 'var(--accent-primary)', cursor: 'pointer' }}>
+        <div
+          onClick={onGoHome}
+          style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontWeight: 800, fontSize: '1.2rem', color: 'var(--accent-primary)', cursor: 'pointer' }}
+          title="Return to Home Landing Page"
+        >
           <div style={{ background: 'var(--accent-glow)', padding: '0.4rem', borderRadius: '0.5rem', display: 'flex' }}>
             <BookOpen size={22} color="var(--accent-primary)" />
           </div>

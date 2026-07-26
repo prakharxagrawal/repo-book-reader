@@ -1,14 +1,67 @@
-import { TocNode } from '../types';
+import { TocNode, FileCategory } from '../types';
 import { GitTreeItem, normalizePath } from './githubApi';
 
+export function detectFileCategory(path: string): { category: FileCategory; language: string; extension: string } {
+  const ext = path.includes('.') ? path.split('.').pop()?.toLowerCase() || '' : '';
+
+  if (['md', 'markdown', 'mdown', 'mdx'].includes(ext)) {
+    return { category: 'markdown', language: 'markdown', extension: ext };
+  }
+
+  const langMap: Record<string, string> = {
+    ts: 'typescript',
+    tsx: 'tsx',
+    js: 'javascript',
+    jsx: 'jsx',
+    py: 'python',
+    go: 'go',
+    rs: 'rust',
+    java: 'java',
+    c: 'c',
+    cpp: 'cpp',
+    cc: 'cpp',
+    h: 'c',
+    hpp: 'cpp',
+    cs: 'csharp',
+    rb: 'ruby',
+    php: 'php',
+    swift: 'swift',
+    kt: 'kotlin',
+    html: 'html',
+    css: 'css',
+    scss: 'scss',
+    json: 'json',
+    yaml: 'yaml',
+    yml: 'yaml',
+    sh: 'bash',
+    bash: 'bash',
+    sql: 'sql',
+    toml: 'toml',
+    xml: 'xml',
+    dockerfile: 'dockerfile',
+  };
+
+  const imgExts = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico'];
+  if (imgExts.includes(ext)) {
+    return { category: 'image', language: ext, extension: ext };
+  }
+
+  if (langMap[ext]) {
+    return { category: 'code', language: langMap[ext], extension: ext };
+  }
+
+  const dataExts = ['json', 'csv', 'yaml', 'yml', 'xml', 'toml', 'env'];
+  if (dataExts.includes(ext)) {
+    return { category: 'data', language: ext, extension: ext };
+  }
+
+  return { category: 'other', language: ext || 'text', extension: ext };
+}
+
 function formatTitle(name: string): string {
-  // Remove file extension
-  let clean = name.replace(/\.md$/i, '');
-  // Format numbers like 01-intro -> 01. Intro
+  let clean = name.replace(/\.[a-z0-9]+$/i, '');
   clean = clean.replace(/^(\d+)[-_]/, '$1. ');
-  // Replace hyphens and underscores with spaces
   clean = clean.replace(/[-_]/g, ' ');
-  // Capitalize words
   return clean
     .split(' ')
     .map((w) => (w ? w.charAt(0).toUpperCase() + w.slice(1) : ''))
@@ -32,6 +85,7 @@ export function parseSummaryMd(summaryText: string): TocNode[] {
       const title = match[1].trim();
       const rawPath = match[2].trim();
       const path = normalizePath(rawPath);
+      const meta = detectFileCategory(path);
 
       const node: TocNode = {
         id: path,
@@ -39,6 +93,9 @@ export function parseSummaryMd(summaryText: string): TocNode[] {
         path,
         type: 'chapter',
         level: 1,
+        fileCategory: meta.category,
+        language: meta.language,
+        extension: meta.extension,
         children: [],
       };
 
@@ -65,27 +122,21 @@ export function parseSummaryMd(summaryText: string): TocNode[] {
 }
 
 export function buildTocFromGitTree(treeItems: GitTreeItem[]): TocNode[] {
-  // Filter for markdown files
-  const mdFiles = treeItems.filter(
-    (item) => item.type === 'blob' && item.path.toLowerCase().endsWith('.md')
-  );
-
-  // Exclude meta files like LICENSE, CODE_OF_CONDUCT, CONTRIBUTING if not part of main docs
-  const filteredFiles = mdFiles.filter((file) => {
-    const name = file.path.toLowerCase();
+  // Exclude unwanted git metadata or heavy build artifacts
+  const filteredFiles = treeItems.filter((item) => {
+    const p = item.path.toLowerCase();
     return (
-      !name.startsWith('.github') &&
-      !name.includes('license') &&
-      !name.includes('code_of_conduct') &&
-      !name.includes('contributing')
+      item.type === 'blob' &&
+      !p.startsWith('.git/') &&
+      !p.startsWith('node_modules/') &&
+      !p.startsWith('dist/') &&
+      !p.startsWith('build/') &&
+      !p.endsWith('.lock') &&
+      !p.endsWith('package-lock.json')
     );
   });
 
-  // Organize by directories
-  const treeMap: Record<string, TocNode> = {};
-  const rootNodes: TocNode[] = [];
-
-  // Sort files logically: root README first, then numerical folders, then alphabetical
+  // Sort files logically: root README first, then markdown files, then code files
   filteredFiles.sort((a, b) => {
     const pathA = a.path.toLowerCase();
     const pathB = b.path.toLowerCase();
@@ -93,28 +144,41 @@ export function buildTocFromGitTree(treeItems: GitTreeItem[]): TocNode[] {
     if (pathA === 'readme.md') return -1;
     if (pathB === 'readme.md') return 1;
 
+    const isMdA = pathA.endsWith('.md');
+    const isMdB = pathB.endsWith('.md');
+
+    if (isMdA && !isMdB) return -1;
+    if (!isMdA && isMdB) return 1;
+
     return pathA.localeCompare(pathB, undefined, { numeric: true, sensitivity: 'base' });
   });
 
-  // Group files into folder-based nodes
+  const treeMap: Record<string, TocNode> = {};
+  const rootNodes: TocNode[] = [];
+
   for (const file of filteredFiles) {
     const parts = file.path.split('/');
-    
+    const meta = detectFileCategory(file.path);
+
     // Root level file
     if (parts.length === 1) {
       const isReadme = parts[0].toLowerCase() === 'readme.md';
       rootNodes.push({
         id: file.path,
-        title: isReadme ? 'Overview & Introduction' : formatTitle(parts[0]),
+        title: isReadme ? 'Overview & Readme' : parts[0],
         path: file.path,
-        type: 'chapter',
+        type: 'file',
         level: 1,
         sha: file.sha,
+        size: file.size,
+        fileCategory: meta.category,
+        language: meta.language,
+        extension: meta.extension,
       });
       continue;
     }
 
-    // Nested file in folder
+    // Nested file in directory
     let currentPath = '';
     let parentNode: TocNode | null = null;
 
@@ -124,13 +188,13 @@ export function buildTocFromGitTree(treeItems: GitTreeItem[]): TocNode[] {
       currentPath = currentPath ? `${currentPath}/${part}` : part;
 
       if (!isFile) {
-        // Directory node
+        // Directory Node
         if (!treeMap[currentPath]) {
           const folderNode: TocNode = {
             id: currentPath,
-            title: formatTitle(part),
+            title: part,
             path: currentPath,
-            type: 'chapter',
+            type: 'folder',
             level: i + 1,
             children: [],
           };
@@ -145,20 +209,23 @@ export function buildTocFromGitTree(treeItems: GitTreeItem[]): TocNode[] {
         }
         parentNode = treeMap[currentPath];
       } else {
-        // File node inside directory
+        // File Node
         const isIndexReadme = part.toLowerCase() === 'readme.md';
         const fileNode: TocNode = {
           id: file.path,
-          title: isIndexReadme ? `${formatTitle(parts[i - 1])} - Chapter Overview` : formatTitle(part),
+          title: part,
           path: file.path,
-          type: 'section',
+          type: 'file',
           level: i + 1,
           sha: file.sha,
+          size: file.size,
+          fileCategory: meta.category,
+          language: meta.language,
+          extension: meta.extension,
         };
 
         if (parentNode) {
           if (!parentNode.children) parentNode.children = [];
-          // Put README.md as the first child of a folder
           if (isIndexReadme) {
             parentNode.children.unshift(fileNode);
           } else {
@@ -171,7 +238,6 @@ export function buildTocFromGitTree(treeItems: GitTreeItem[]): TocNode[] {
     }
   }
 
-  // Clean up folder nodes that only have 1 file with no path
   return rootNodes;
 }
 
@@ -179,7 +245,7 @@ export function flattenToc(nodes: TocNode[]): TocNode[] {
   const result: TocNode[] = [];
   function traverse(list: TocNode[]) {
     for (const node of list) {
-      if (node.path.endsWith('.md')) {
+      if (node.path && node.type !== 'folder') {
         result.push(node);
       }
       if (node.children && node.children.length > 0) {

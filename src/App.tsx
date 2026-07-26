@@ -17,7 +17,7 @@ import {
   saveBookmarks,
   loadUserNotes,
   saveUserNotes,
-} from './services/storage'; // Wait, storage is under services or root? Let's check storage path
+} from './services/storage';
 import { fetchRepoDetails, fetchGitTreeItems, fetchFileContent, resolveMarkdownAssetUrls } from './services/githubApi';
 import { buildTocFromGitTree, parseSummaryMd, flattenToc } from './services/tocParser';
 import { exportToPdf, exportToHtml } from './services/exportService';
@@ -28,6 +28,7 @@ import { OnPageToc } from './components/OnPageToc';
 import { SearchModal } from './components/SearchModal';
 import { SettingsModal } from './components/SettingsModal';
 import { NotesDrawer } from './components/NotesDrawer';
+import { LandingHero } from './components/LandingHero';
 import { PRESET_REPOSITORIES } from './data/presets';
 
 export function App() {
@@ -37,6 +38,7 @@ export function App() {
   const [activeNode, setActiveNode] = useState<TocNode | null>(null);
   const [markdownContent, setMarkdownContent] = useState<string>('');
   const [headings, setHeadings] = useState<HeadingItem[]>([]);
+  const [showLanding, setShowLanding] = useState<boolean>(false);
   
   const [isTreeLoading, setIsTreeLoading] = useState<boolean>(false);
   const [isContentLoading, setIsContentLoading] = useState<boolean>(false);
@@ -70,11 +72,12 @@ export function App() {
 
   // Load a repository by owner and repo
   const loadRepository = useCallback(
-    async (owner: string, repo: string) => {
+    async (owner: string, repo: string, targetFilePath?: string) => {
       setIsTreeLoading(true);
       setMarkdownContent('');
       setActiveNode(null);
       setToc([]);
+      setShowLanding(false);
 
       try {
         const repoDetails = await fetchRepoDetails(owner, repo, settings.githubPat);
@@ -110,14 +113,15 @@ export function App() {
 
         setToc(generatedToc);
 
-        // Select first chapter automatically or last read path
+        // Select specific file or first item
         const flat = flattenToc(generatedToc);
         if (flat.length > 0) {
           const savedProgress = loadReadingState(`${owner}_${repo}`);
-          const targetNode =
-            flat.find((n) => n.path === savedProgress.lastReadPath) || flat[0];
+          const targetNode = targetFilePath
+            ? flat.find((n) => n.path.toLowerCase() === targetFilePath.toLowerCase() || n.path.toLowerCase().endsWith(targetFilePath.toLowerCase()))
+            : flat.find((n) => n.path === savedProgress.lastReadPath) || flat[0];
           
-          setActiveNode(targetNode);
+          setActiveNode(targetNode || flat[0]);
         }
       } catch (err: any) {
         console.error('Error loading repository:', err);
@@ -129,11 +133,21 @@ export function App() {
     [settings.githubPat]
   );
 
-  // Load initial preset repo on mount
+  // Deep link parsing on mount
   useEffect(() => {
-    const defaultPreset = PRESET_REPOSITORIES[0];
-    loadRepository(defaultPreset.owner, defaultPreset.repo);
-  }, []);
+    const params = new URLSearchParams(window.location.search);
+    const repoParam = params.get('repo');
+    const fileParam = params.get('file');
+
+    if (repoParam && repoParam.includes('/')) {
+      const [owner, repo] = repoParam.split('/');
+      loadRepository(owner, repo, fileParam || undefined);
+    } else {
+      // Default to first preset
+      const defaultPreset = PRESET_REPOSITORIES[0];
+      loadRepository(defaultPreset.owner, defaultPreset.repo);
+    }
+  }, [loadRepository]);
 
   // Fetch content whenever activeNode changes
   useEffect(() => {
@@ -169,7 +183,7 @@ export function App() {
       })
       .catch((err) => {
         if (!isMounted) return;
-        setMarkdownContent(`# Error Loading Chapter\n\nCould not fetch content for \`${activeNode.path}\`. ${err.message}`);
+        setMarkdownContent(`# Error Loading File\n\nCould not fetch content for \`${activeNode.path}\`. ${err.message}`);
       })
       .finally(() => {
         if (isMounted) setIsContentLoading(false);
@@ -272,7 +286,7 @@ export function App() {
         id: targetPath,
         title: targetPath.split('/').pop() || targetPath,
         path: targetPath,
-        type: 'chapter',
+        type: 'file',
         level: 1,
       });
     }
@@ -286,47 +300,54 @@ export function App() {
         settings={settings}
         onUpdateSettings={handleUpdateSettings}
         onSelectRepo={(owner, repo) => loadRepository(owner, repo)}
+        onGoHome={() => setShowLanding(true)}
         onOpenSearch={() => setIsSearchOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenNotes={() => setIsNotesOpen(true)}
         onExportPdf={exportToPdf}
-        onExportHtml={() => exportToHtml(repoInfo, activeNode?.title || 'Chapter', markdownContent)}
+        onExportHtml={() => exportToHtml(repoInfo, activeNode?.title || 'File', markdownContent)}
         bookmarksCount={bookmarks.length}
         notesCount={notes.length}
       />
 
-      {/* Main Reader Layout Grid */}
-      <div className="main-layout">
-        {/* Left Sidebar Chapter Tree */}
-        <Sidebar
-          toc={toc}
-          activePath={activeNode?.path || null}
-          completedPaths={readingState.completedPaths}
-          onSelectNode={(node) => setActiveNode(node)}
-          onToggleComplete={handleToggleComplete}
-          isLoading={isTreeLoading}
-        />
+      {/* Main Layout Grid vs Landing Hero */}
+      {showLanding ? (
+        <LandingHero onSelectRepo={(owner, repo) => loadRepository(owner, repo)} />
+      ) : (
+        <div className="main-layout">
+          {/* Left Sidebar Tree */}
+          <Sidebar
+            toc={toc}
+            activePath={activeNode?.path || null}
+            completedPaths={readingState.completedPaths}
+            onSelectNode={(node) => setActiveNode(node)}
+            onToggleComplete={handleToggleComplete}
+            isLoading={isTreeLoading}
+          />
 
-        {/* Center Chapter Reader */}
-        <Reader
-          currentPath={activeNode?.path || null}
-          chapterTitle={activeNode?.title || ''}
-          markdownContent={markdownContent}
-          isLoading={isContentLoading}
-          isCompleted={activeNode ? readingState.completedPaths.includes(activeNode.path) : false}
-          onToggleComplete={handleToggleComplete}
-          onAddBookmark={handleAddBookmark}
-          onNavigatePrev={handleNavigatePrev}
-          onNavigateNext={handleNavigateNext}
-          hasPrev={hasPrev}
-          hasNext={hasNext}
-          onHeadingsExtracted={(hList) => setHeadings(hList)}
-          onNavigateToPath={handleNavigateToPath}
-        />
+          {/* Center File Reader & Code Viewer */}
+          <Reader
+            currentPath={activeNode?.path || null}
+            chapterTitle={activeNode?.title || ''}
+            markdownContent={markdownContent}
+            fileCategory={activeNode?.fileCategory}
+            language={activeNode?.language}
+            isLoading={isContentLoading}
+            isCompleted={activeNode ? readingState.completedPaths.includes(activeNode.path) : false}
+            onToggleComplete={handleToggleComplete}
+            onAddBookmark={handleAddBookmark}
+            onNavigatePrev={handleNavigatePrev}
+            onNavigateNext={handleNavigateNext}
+            hasPrev={hasPrev}
+            hasNext={hasNext}
+            onHeadingsExtracted={(hList) => setHeadings(hList)}
+            onNavigateToPath={handleNavigateToPath}
+          />
 
-        {/* Right OnPage Table of Contents Outline */}
-        <OnPageToc headings={headings} />
-      </div>
+          {/* Right OnPage TOC Outline (for markdown files) */}
+          <OnPageToc headings={headings} />
+        </div>
+      )}
 
       {/* Modals & Drawers */}
       <SearchModal

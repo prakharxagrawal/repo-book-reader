@@ -1,6 +1,7 @@
 export type Theme = 'dark' | 'obsidian' | 'sepia' | 'light';
 export type FontFamily = 'sans' | 'serif' | 'mono';
 export type FontSize = 'sm' | 'base' | 'lg' | 'xl';
+export type FileCategory = 'markdown' | 'code' | 'image' | 'data' | 'other';
 
 export interface RepoInfo {
   owner: string;
@@ -18,12 +19,16 @@ export interface TocNode {
   id: string;
   title: string;
   path: string;
-  type: 'chapter' | 'section' | 'file';
+  type: 'chapter' | 'section' | 'file' | 'folder';
   level: number;
   children?: TocNode[];
   downloadUrl?: string;
   sha?: string;
   isCompleted?: boolean;
+  fileCategory?: FileCategory;
+  extension?: string;
+  language?: string;
+  size?: number;
 }
 
 export interface HeadingItem {
@@ -35,7 +40,9 @@ export interface HeadingItem {
 export interface ChapterContent {
   path: string;
   title: string;
-  rawMarkdown: string;
+  content: string;
+  fileCategory: FileCategory;
+  language: string;
   wordCount: number;
   readingTimeMinutes: number;
   headings: HeadingItem[];
