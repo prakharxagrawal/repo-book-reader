@@ -129,7 +129,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   fontWeight: 700,
                   display: 'flex',
                   alignItems: 'center',
-                  justify: 'center',
+                  justifyContent: 'center',
                   gap: '0.6rem',
                   borderRadius: '0.6rem',
                   boxShadow: 'var(--shadow-md)',

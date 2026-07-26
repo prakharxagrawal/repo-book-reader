@@ -94,7 +94,7 @@ export function App() {
           setUserProfile(profile);
           localStorage.setItem(USER_PROFILE_KEY, JSON.stringify(profile));
           setSettings((prev) => {
-            const updated = { ...prev, githubPat: profile.token };
+            const updated = { ...prev, githubPat: profile.token || '' };
             saveUserSettings(updated);
             return updated;
           });
