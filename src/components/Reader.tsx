@@ -506,8 +506,8 @@ export const Reader: React.FC<ReaderProps> = ({
       {/* Main Body: Markdown vs Standalone Diagram vs Code Viewer */}
       {isStandaloneDiagram ? (
         <div ref={containerRef} style={{ padding: '2rem', background: 'var(--bg-secondary)', borderRadius: '0.85rem', border: '1px solid var(--border-color)', boxShadow: 'var(--shadow-md)', textAlign: 'center' }}>
-          <div style={{ fontWeight: 700, fontSize: '1.2rem', color: 'var(--accent-primary)', marginBottom: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-            <Layers size={22} />
+          <div style={{ fontWeight: 700, fontSize: '1.2rem', color: 'var(--text-main)', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+            <Layers size={22} color="var(--accent-primary)" />
             <span>Visual Diagram File: {currentPath?.split('/').pop()}</span>
           </div>
 
@@ -516,9 +516,55 @@ export const Reader: React.FC<ReaderProps> = ({
               <div className="mermaid-target">Rendering Mermaid Diagram...</div>
             </div>
           ) : currentPath?.toLowerCase().endsWith('.excalidraw') || currentPath?.toLowerCase().endsWith('.excalidraw.json') ? (
-            <div className="excalidraw-wrapper" data-excalidraw={encodeURIComponent(markdownContent)}>
-              <div className="excalidraw-target">Rendering Excalidraw Sketch...</div>
-            </div>
+            (() => {
+              if (!markdownContent) {
+                return <div style={{ padding: '2rem', color: 'var(--text-dim)' }}>Loading diagram file...</div>;
+              }
+              try {
+                const parsed = JSON.parse(markdownContent);
+                const elements: any[] = parsed.elements || (Array.isArray(parsed) ? parsed : []);
+                const textElements = elements.filter((el) => el.type === 'text' && el.text);
+                const shapeElements = elements.filter((el) => el.type !== 'text');
+
+                return (
+                  <div style={{ padding: '1.5rem', background: 'var(--bg-tertiary)', borderRadius: '0.75rem', border: '1px solid var(--border-color)', textAlign: 'left' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem' }}>
+                      <div style={{ fontWeight: 700, fontSize: '1.1rem', color: 'var(--accent-primary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        🎨 Excalidraw Visual Diagram ({elements.length} elements)
+                      </div>
+                      <span className="badge" style={{ fontSize: '0.75rem', background: 'rgba(16, 185, 129, 0.1)', color: 'var(--accent-success)', border: '1px solid var(--accent-success)' }}>
+                        Excalidraw Format
+                      </span>
+                    </div>
+
+                    {textElements.length > 0 && (
+                      <div style={{ marginBottom: '1.25rem' }}>
+                        <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          Diagram Text Labels & Architecture Components:
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                          {textElements.map((t: any, idx: number) => (
+                            <div key={idx} className="badge" style={{ padding: '0.4rem 0.75rem', background: 'var(--bg-secondary)', color: 'var(--text-main)', border: '1px solid var(--border-color)', fontSize: '0.85rem' }}>
+                              {t.text}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', background: 'var(--bg-primary)', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid var(--border-subtle)' }}>
+                      📐 Diagram structure parsed: {shapeElements.length} vector shapes & {textElements.length} text annotations.
+                    </div>
+                  </div>
+                );
+              } catch (e: any) {
+                return (
+                  <div style={{ padding: '1.5rem', color: 'var(--accent-danger)', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '0.5rem', border: '1px solid var(--accent-danger)' }}>
+                    Excalidraw JSON syntax error: {e.message}
+                  </div>
+                );
+              }
+            })()
           ) : currentPath?.toLowerCase().endsWith('.svg') ? (
             <div dangerouslySetInnerHTML={{ __html: markdownContent }} style={{ overflowX: 'auto', padding: '1rem' }} />
           ) : (
