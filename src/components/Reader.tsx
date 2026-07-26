@@ -170,10 +170,10 @@ export const Reader: React.FC<ReaderProps> = ({
         const uniqueId = `mermaid-svg-${Date.now()}-${idx}`;
         mermaid
           .render(uniqueId, decoded)
-          .then(({ svg }) => {
+          .then(({ svg }: { svg: string }) => {
             target.innerHTML = svg;
           })
-          .catch((err) => {
+          .catch((err: unknown) => {
             console.error('Mermaid render error', err);
             target.innerHTML = `<div style="color: var(--accent-danger); font-size: 0.85rem;">Failed to render Mermaid diagram</div>`;
           });
