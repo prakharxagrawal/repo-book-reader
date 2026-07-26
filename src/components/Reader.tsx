@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { marked } from 'marked';
+import mermaid from 'mermaid';
 import {
   Clock,
   BookOpen,
@@ -13,6 +14,8 @@ import {
   FileText,
   FileCode,
   Code2,
+  Play,
+  Terminal,
 } from 'lucide-react';
 import { HeadingItem, FileCategory } from '../types';
 import { normalizePath } from '../services/githubApi';
@@ -57,6 +60,19 @@ export const Reader: React.FC<ReaderProps> = ({
 
   const isMarkdown = fileCategory === 'markdown' || (currentPath && currentPath.toLowerCase().endsWith('.md'));
 
+  // Initialize Mermaid
+  useEffect(() => {
+    try {
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: 'dark',
+        securityLevel: 'loose',
+      });
+    } catch (e) {
+      console.error('Mermaid initialization error', e);
+    }
+  }, []);
+
   // Compute Word Count & Reading Time
   const { wordCount, readingTimeMinutes, lineCount } = useMemo(() => {
     if (!markdownContent) return { wordCount: 0, readingTimeMinutes: 0, lineCount: 0 };
@@ -91,18 +107,43 @@ export const Reader: React.FC<ReaderProps> = ({
       `;
     });
 
-    // Code blocks header
-    let codeIndex = 0;
+    // Intercept Mermaid blocks & Code blocks
+    let blockIndex = 0;
     html = html.replace(/<pre><code(?:\s+class="language-([^"]+)")?>([\s\S]*?)<\/code><\/pre>/gi, (match, lang, code) => {
-      codeIndex++;
-      const langName = lang || 'code';
+      blockIndex++;
+      const langName = (lang || 'code').toLowerCase();
+
+      // Mermaid diagram block
+      if (langName === 'mermaid') {
+        const diagramId = `mermaid-diagram-${blockIndex}`;
+        return `
+          <div class="mermaid-wrapper" id="${diagramId}" data-mermaid="${encodeURIComponent(code)}">
+            <div class="mermaid-target">Loading diagram...</div>
+          </div>
+        `;
+      }
+
+      // Executable code block (JS/TS/Python) vs regular code block
+      const canRun = ['javascript', 'js', 'typescript', 'ts', 'python', 'py'].includes(langName);
+
       return `
-        <div class="code-block-wrapper">
+        <div class="code-block-wrapper" id="code-block-container-${blockIndex}">
           <div class="code-block-header">
             <span>${langName}</span>
-            <button class="btn btn-icon copy-code-btn" data-code="${encodeURIComponent(code)}" style="background: transparent; border: none; padding: 0.2rem 0.5rem; cursor: pointer; color: var(--text-muted);">
-              Copy
-            </button>
+            <div style="display: flex; gap: 0.4rem;">
+              ${
+                canRun
+                  ? `<button class="btn btn-icon run-code-btn" data-code="${encodeURIComponent(
+                      code
+                    )}" data-lang="${langName}" data-target="code-block-container-${blockIndex}" style="background: var(--bg-tertiary); border: 1px solid var(--border-color); padding: 0.2rem 0.5rem; cursor: pointer; color: var(--accent-primary); font-size: 0.75rem; border-radius: 4px;">
+                      Run Snippet
+                    </button>`
+                  : ''
+              }
+              <button class="btn btn-icon copy-code-btn" data-code="${encodeURIComponent(code)}" style="background: transparent; border: none; padding: 0.2rem 0.5rem; cursor: pointer; color: var(--text-muted); font-size: 0.75rem;">
+                Copy
+              </button>
+            </div>
           </div>
           <pre><code>${code}</code></pre>
         </div>
@@ -111,6 +152,34 @@ export const Reader: React.FC<ReaderProps> = ({
 
     return html;
   }, [markdownContent, isMarkdown]);
+
+  // Asynchronously render Mermaid diagrams
+  useEffect(() => {
+    if (!containerRef.current || !isMarkdown) return;
+    const mermaidContainers = containerRef.current.querySelectorAll('.mermaid-wrapper');
+
+    mermaidContainers.forEach((wrapper, idx) => {
+      const rawCode = wrapper.getAttribute('data-mermaid');
+      const target = wrapper.querySelector('.mermaid-target');
+      if (rawCode && target) {
+        const decoded = decodeURIComponent(rawCode)
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/&amp;/g, '&');
+
+        const uniqueId = `mermaid-svg-${Date.now()}-${idx}`;
+        mermaid
+          .render(uniqueId, decoded)
+          .then(({ svg }) => {
+            target.innerHTML = svg;
+          })
+          .catch((err) => {
+            console.error('Mermaid render error', err);
+            target.innerHTML = `<div style="color: var(--accent-danger); font-size: 0.85rem;">Failed to render Mermaid diagram</div>`;
+          });
+      }
+    });
+  }, [parsedHtml, isMarkdown]);
 
   // Extract Headings
   useEffect(() => {
@@ -132,11 +201,12 @@ export const Reader: React.FC<ReaderProps> = ({
     onHeadingsExtracted(headingsList);
   }, [parsedHtml, isMarkdown, onHeadingsExtracted]);
 
-  // Copy code handler for code blocks
+  // Attach event listeners for Copy Code and Run Code
   useEffect(() => {
     if (!containerRef.current || !isMarkdown) return;
-    const buttons = containerRef.current.querySelectorAll('.copy-code-btn');
 
+    // Handle Copy Buttons
+    const copyBtns = containerRef.current.querySelectorAll('.copy-code-btn');
     const handleCopy = (e: Event) => {
       const target = e.currentTarget as HTMLButtonElement;
       const rawCode = target.getAttribute('data-code');
@@ -152,10 +222,66 @@ export const Reader: React.FC<ReaderProps> = ({
         }, 2000);
       }
     };
+    copyBtns.forEach((btn) => btn.addEventListener('click', handleCopy));
 
-    buttons.forEach((btn) => btn.addEventListener('click', handleCopy));
+    // Handle Run Code Buttons (In-Browser Execution Console Sandbox)
+    const runBtns = containerRef.current.querySelectorAll('.run-code-btn');
+    const handleRun = (e: Event) => {
+      const target = e.currentTarget as HTMLButtonElement;
+      const rawCode = target.getAttribute('data-code');
+      const containerId = target.getAttribute('data-target');
+
+      if (rawCode && containerId) {
+        const decoded = decodeURIComponent(rawCode)
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/&amp;/g, '&');
+
+        const wrapper = document.getElementById(containerId);
+        if (!wrapper) return;
+
+        // Existing console output
+        let consoleBox = wrapper.querySelector('.code-console-output');
+        if (!consoleBox) {
+          consoleBox = document.createElement('div');
+          consoleBox.className = 'code-console-output';
+          wrapper.appendChild(consoleBox);
+        }
+
+        const logs: string[] = [];
+        const customConsole = {
+          log: (...args: any[]) => logs.push(args.map((a) => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ')),
+          error: (...args: any[]) => logs.push('[Error] ' + args.join(' ')),
+          warn: (...args: any[]) => logs.push('[Warning] ' + args.join(' ')),
+        };
+
+        try {
+          // Execute in isolated Function sandbox
+          const runFn = new Function('console', decoded);
+          const result = runFn(customConsole);
+
+          let outputText = logs.join('\n');
+          if (result !== undefined) {
+            outputText += (outputText ? '\n' : '') + `=> Return: ${JSON.stringify(result)}`;
+          }
+
+          consoleBox.innerHTML = `
+            <div class="code-console-header">Console Output</div>
+            <pre style="margin: 0; white-space: pre-wrap;">${outputText || 'Snippet executed cleanly with no output.'}</pre>
+          `;
+        } catch (err: any) {
+          consoleBox.innerHTML = `
+            <div class="code-console-header" style="color: var(--accent-danger);">Execution Error</div>
+            <pre style="margin: 0; color: var(--accent-danger); white-space: pre-wrap;">${err.message}</pre>
+          `;
+        }
+      }
+    };
+    runBtns.forEach((btn) => btn.addEventListener('click', handleRun));
+
     return () => {
-      buttons.forEach((btn) => btn.removeEventListener('click', handleCopy));
+      copyBtns.forEach((btn) => btn.removeEventListener('click', handleCopy));
+      runBtns.forEach((btn) => btn.removeEventListener('click', handleRun));
     };
   }, [parsedHtml, isMarkdown]);
 
@@ -166,9 +292,9 @@ export const Reader: React.FC<ReaderProps> = ({
     }
   }, [currentPath]);
 
-  // Intercept links in markdown
+  // In-Page Anchor & Hyperlink Navigation
   useEffect(() => {
-    if (!containerRef.current || !onNavigateToPath || !currentPath || !isMarkdown) return;
+    if (!containerRef.current || !isMarkdown) return;
 
     const handleLinkClick = (e: MouseEvent) => {
       const target = (e.target as HTMLElement).closest('a');
@@ -177,19 +303,43 @@ export const Reader: React.FC<ReaderProps> = ({
       const href = target.getAttribute('href');
       if (!href) return;
 
+      // External links
       if (href.startsWith('http://') || href.startsWith('https://') || href.startsWith('mailto:')) {
         target.setAttribute('target', '_blank');
         target.setAttribute('rel', 'noopener noreferrer');
         return;
       }
 
-      if (href.startsWith('#')) return;
+      // Smooth in-page anchor link scrolling (#heading-id or anchor target)
+      if (href.startsWith('#')) {
+        e.preventDefault();
+        const targetId = href.substring(1);
+        let targetEl = document.getElementById(targetId);
 
-      e.preventDefault();
-      const dir = currentPath.includes('/') ? currentPath.substring(0, currentPath.lastIndexOf('/')) : '';
-      const combined = dir ? `${dir}/${href}` : href;
-      const targetPath = normalizePath(combined);
-      onNavigateToPath(targetPath);
+        if (!targetEl && containerRef.current) {
+          // Search headings by text if ID doesn't match
+          const headings = containerRef.current.querySelectorAll('h1, h2, h3, h4');
+          headings.forEach((h) => {
+            if (h.textContent?.toLowerCase().replace(/[^a-z0-9]+/g, '-').includes(targetId.toLowerCase())) {
+              targetEl = h as HTMLElement;
+            }
+          });
+        }
+
+        if (targetEl && containerRef.current) {
+          targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        return;
+      }
+
+      // Relative markdown file link navigation
+      if (onNavigateToPath && (href.toLowerCase().includes('.md') || !href.includes(':'))) {
+        e.preventDefault();
+        const dir = currentPath && currentPath.includes('/') ? currentPath.substring(0, currentPath.lastIndexOf('/')) : '';
+        const combined = dir ? `${dir}/${href}` : href;
+        const targetPath = normalizePath(combined);
+        onNavigateToPath(targetPath);
+      }
     };
 
     const container = containerRef.current;
