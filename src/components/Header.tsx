@@ -284,10 +284,12 @@ export const Header: React.FC<HeaderProps> = ({
           )}
         </div>
 
-        {/* Admin Dashboard Trigger */}
-        <button className="btn btn-icon" onClick={onOpenAdmin} title="Admin Analytics & Reader Logs (Zero-DB)">
-          <ShieldCheck size={18} color="var(--accent-primary)" />
-        </button>
+        {/* Admin Dashboard Trigger - Only visible for admin username or when authenticated */}
+        {(userProfile?.username?.toLowerCase() === 'prakharxagrawal' || !userProfile) && (
+          <button className="btn btn-icon" onClick={onOpenAdmin} title="Admin Analytics (Admin Only)">
+            <ShieldCheck size={18} color="var(--accent-primary)" />
+          </button>
+        )}
 
         {/* GitHub Auth Profile Trigger */}
         <button className="btn btn-icon" onClick={onOpenAuth} title={userProfile ? `@${userProfile.username}` : 'Sign In with GitHub'}>
