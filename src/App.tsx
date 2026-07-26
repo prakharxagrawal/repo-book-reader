@@ -7,6 +7,7 @@ import {
   ReadingState,
   Bookmark,
   UserNote,
+  UserProfile,
 } from './types';
 import {
   loadUserSettings,
@@ -21,6 +22,8 @@ import {
 import { fetchRepoDetails, fetchGitTreeItems, fetchFileContent, resolveMarkdownAssetUrls } from './services/githubApi';
 import { buildTocFromGitTree, parseSummaryMd, flattenToc } from './services/tocParser';
 import { exportToPdf, exportToHtml } from './services/exportService';
+import { logUserActivity } from './services/analyticsService';
+
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { Reader } from './components/Reader';
@@ -28,18 +31,31 @@ import { OnPageToc } from './components/OnPageToc';
 import { SearchModal } from './components/SearchModal';
 import { SettingsModal } from './components/SettingsModal';
 import { NotesDrawer } from './components/NotesDrawer';
+import { AuthModal } from './components/AuthModal';
+import { AdminDashboard } from './components/AdminDashboard';
 import { LandingHero } from './components/LandingHero';
 import { PRESET_REPOSITORIES } from './data/presets';
 
+const USER_PROFILE_KEY = 'gitbookify_user_profile_v1';
+
 export function App() {
   const [settings, setSettings] = useState<UserSettings>(() => loadUserSettings());
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(() => {
+    try {
+      const raw = localStorage.getItem(USER_PROFILE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      return null;
+    }
+  });
+
   const [repoInfo, setRepoInfo] = useState<RepoInfo | null>(null);
   const [toc, setToc] = useState<TocNode[]>([]);
   const [activeNode, setActiveNode] = useState<TocNode | null>(null);
   const [markdownContent, setMarkdownContent] = useState<string>('');
   const [headings, setHeadings] = useState<HeadingItem[]>([]);
   const [showLanding, setShowLanding] = useState<boolean>(false);
-  
+
   const [isTreeLoading, setIsTreeLoading] = useState<boolean>(false);
   const [isContentLoading, setIsContentLoading] = useState<boolean>(false);
 
@@ -47,6 +63,8 @@ export function App() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isNotesOpen, setIsNotesOpen] = useState(false);
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [isAdminOpen, setIsAdminOpen] = useState(false);
 
   // Reading state & bookmarks
   const repoKey = repoInfo ? `${repoInfo.owner}_${repoInfo.repo}` : 'default';
@@ -70,6 +88,50 @@ export function App() {
     setNotes(loadUserNotes(repoKey));
   }, [repoKey, repoInfo]);
 
+  // Handle GitHub Login
+  const handleGithubLogin = async (token: string) => {
+    const res = await fetch('https://api.github.com/user', {
+      headers: {
+        Authorization: `token ${token}`,
+        Accept: 'application/vnd.github.v3+json',
+      },
+    });
+
+    if (!res.ok) {
+      throw new Error('Invalid GitHub token. Could not fetch profile.');
+    }
+
+    const data = await res.json();
+    const profile: UserProfile = {
+      username: data.login,
+      name: data.name || data.login,
+      avatarUrl: data.avatar_url,
+      bio: data.bio || '',
+      token,
+      loggedInAt: Date.now(),
+    };
+
+    setUserProfile(profile);
+    localStorage.setItem(USER_PROFILE_KEY, JSON.stringify(profile));
+
+    // Update settings PAT token
+    setSettings((prev) => {
+      const updated = { ...prev, githubPat: token };
+      saveUserSettings(updated);
+      return updated;
+    });
+  };
+
+  const handleGithubLogout = () => {
+    setUserProfile(null);
+    localStorage.removeItem(USER_PROFILE_KEY);
+    setSettings((prev) => {
+      const updated = { ...prev, githubPat: '' };
+      saveUserSettings(updated);
+      return updated;
+    });
+  };
+
   // Load a repository by owner and repo
   const loadRepository = useCallback(
     async (owner: string, repo: string, targetFilePath?: string) => {
@@ -90,6 +152,11 @@ export function App() {
           settings.githubPat
         );
 
+        // Filter strictly for markdown files (.md, .mdx)
+        const mdTreeItems = treeItems.filter(
+          (item) => item.type === 'tree' || item.path.toLowerCase().endsWith('.md') || item.path.toLowerCase().endsWith('.mdx')
+        );
+
         // Check for SUMMARY.md first
         const summaryFile = treeItems.find((item) => item.path.toLowerCase() === 'summary.md');
         let generatedToc: TocNode[] = [];
@@ -105,24 +172,27 @@ export function App() {
             );
             generatedToc = parseSummaryMd(summaryText);
           } catch (e) {
-            generatedToc = buildTocFromGitTree(treeItems);
+            generatedToc = buildTocFromGitTree(mdTreeItems);
           }
         } else {
-          generatedToc = buildTocFromGitTree(treeItems);
+          generatedToc = buildTocFromGitTree(mdTreeItems);
         }
 
         setToc(generatedToc);
 
-        // Select specific file or first item
+        // Select specific file or first chapter
         const flat = flattenToc(generatedToc);
         if (flat.length > 0) {
           const savedProgress = loadReadingState(`${owner}_${repo}`);
           const targetNode = targetFilePath
             ? flat.find((n) => n.path.toLowerCase() === targetFilePath.toLowerCase() || n.path.toLowerCase().endsWith(targetFilePath.toLowerCase()))
             : flat.find((n) => n.path === savedProgress.lastReadPath) || flat[0];
-          
+
           setActiveNode(targetNode || flat[0]);
         }
+
+        // Log analytics event
+        logUserActivity(userProfile?.username || 'Anonymous', `${owner}/${repo}`, targetFilePath || 'root', 'search_repo');
       } catch (err: any) {
         console.error('Error loading repository:', err);
         alert(err.message || 'Failed to load GitHub repository');
@@ -130,7 +200,7 @@ export function App() {
         setIsTreeLoading(false);
       }
     },
-    [settings.githubPat]
+    [settings.githubPat, userProfile]
   );
 
   // Deep link parsing on mount
@@ -180,6 +250,9 @@ export function App() {
           saveReadingState(repoKey, updated);
           return updated;
         });
+
+        // Log chapter view event
+        logUserActivity(userProfile?.username || 'Anonymous', `${repoInfo.owner}/${repoInfo.repo}`, activeNode.path, 'view_chapter');
       })
       .catch((err) => {
         if (!isMounted) return;
@@ -192,7 +265,7 @@ export function App() {
     return () => {
       isMounted = false;
     };
-  }, [activeNode, repoInfo, settings.githubPat, repoKey]);
+  }, [activeNode, repoInfo, settings.githubPat, repoKey, userProfile]);
 
   const handleUpdateSettings = (newSet: Partial<UserSettings>) => {
     setSettings((prev) => {
@@ -211,6 +284,10 @@ export function App() {
 
       const updated = { ...prev, completedPaths: nextCompleted };
       saveReadingState(repoKey, updated);
+
+      if (!isComp && repoInfo) {
+        logUserActivity(userProfile?.username || 'Anonymous', `${repoInfo.owner}/${repoInfo.repo}`, path, 'complete_chapter');
+      }
       return updated;
     });
   };
@@ -229,6 +306,10 @@ export function App() {
     setBookmarks(updated);
     saveBookmarks(repoKey, updated);
     setIsNotesOpen(true);
+
+    if (repoInfo) {
+      logUserActivity(userProfile?.username || 'Anonymous', `${repoInfo.owner}/${repoInfo.repo}`, activeNode.path, 'add_bookmark');
+    }
   };
 
   const handleDeleteBookmark = (id: string) => {
@@ -298,12 +379,15 @@ export function App() {
       <Header
         repoInfo={repoInfo}
         settings={settings}
+        userProfile={userProfile}
         onUpdateSettings={handleUpdateSettings}
         onSelectRepo={(owner, repo) => loadRepository(owner, repo)}
         onGoHome={() => setShowLanding(true)}
         onOpenSearch={() => setIsSearchOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenNotes={() => setIsNotesOpen(true)}
+        onOpenAuth={() => setIsAuthOpen(true)}
+        onOpenAdmin={() => setIsAdminOpen(true)}
         onExportPdf={exportToPdf}
         onExportHtml={() => exportToHtml(repoInfo, activeNode?.title || 'File', markdownContent)}
         bookmarksCount={bookmarks.length}
@@ -362,6 +446,20 @@ export function App() {
         onClose={() => setIsSettingsOpen(false)}
         settings={settings}
         onUpdateSettings={handleUpdateSettings}
+      />
+
+      <AuthModal
+        isOpen={isAuthOpen}
+        onClose={() => setIsAuthOpen(false)}
+        userProfile={userProfile}
+        onLogin={handleGithubLogin}
+        onLogout={handleGithubLogout}
+      />
+
+      <AdminDashboard
+        isOpen={isAdminOpen}
+        onClose={() => setIsAdminOpen(false)}
+        userProfile={userProfile}
       />
 
       <NotesDrawer

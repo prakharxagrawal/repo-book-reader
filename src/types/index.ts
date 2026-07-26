@@ -3,6 +3,34 @@ export type FontFamily = 'sans' | 'serif' | 'mono';
 export type FontSize = 'sm' | 'base' | 'lg' | 'xl';
 export type FileCategory = 'markdown' | 'code' | 'image' | 'data' | 'other';
 
+export interface UserProfile {
+  username: string;
+  name: string;
+  avatarUrl: string;
+  bio?: string;
+  isAdmin?: boolean;
+  token?: string;
+  loggedInAt: number;
+}
+
+export interface UserActivityLog {
+  id: string;
+  username: string;
+  repo: string;
+  chapterPath: string;
+  action: 'view_chapter' | 'complete_chapter' | 'add_bookmark' | 'search_repo';
+  timestamp: number;
+}
+
+export interface AdminAnalytics {
+  totalReaders: number;
+  totalChaptersRead: number;
+  activeReposCount: number;
+  topRepos: { repo: string; views: number }[];
+  logs: UserActivityLog[];
+  lastSyncedAt: number;
+}
+
 export interface RepoInfo {
   owner: string;
   repo: string;

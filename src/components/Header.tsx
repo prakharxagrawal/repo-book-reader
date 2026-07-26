@@ -12,18 +12,29 @@ import {
   Star,
   Layers,
 } from 'lucide-react';
-import { RepoInfo, Theme, UserSettings } from '../types';
+import { RepoInfo, Theme, UserSettings, UserProfile } from '../types';
 import { PRESET_REPOSITORIES } from '../data/presets';
+import { ShieldCheck, User } from 'lucide-react';
+
+const GithubIcon: React.FC<{ size?: number; color?: string }> = ({ size = 20, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4" />
+    <path d="M9 18c-4.51 2-5-2-7-2" />
+  </svg>
+);
 
 interface HeaderProps {
   repoInfo: RepoInfo | null;
   settings: UserSettings;
+  userProfile: UserProfile | null;
   onUpdateSettings: (newSettings: Partial<UserSettings>) => void;
   onSelectRepo: (owner: string, repo: string) => void;
   onGoHome?: () => void;
   onOpenSearch: () => void;
   onOpenSettings: () => void;
   onOpenNotes: () => void;
+  onOpenAuth: () => void;
+  onOpenAdmin: () => void;
   onExportPdf: () => void;
   onExportHtml: () => void;
   bookmarksCount: number;
@@ -33,12 +44,15 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({
   repoInfo,
   settings,
+  userProfile,
   onUpdateSettings,
   onSelectRepo,
   onGoHome,
   onOpenSearch,
   onOpenSettings,
   onOpenNotes,
+  onOpenAuth,
+  onOpenAdmin,
   onExportPdf,
   onExportHtml,
   bookmarksCount,
@@ -269,6 +283,24 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           )}
         </div>
+
+        {/* Admin Dashboard Trigger */}
+        <button className="btn btn-icon" onClick={onOpenAdmin} title="Admin Analytics & Reader Logs (Zero-DB)">
+          <ShieldCheck size={18} color="var(--accent-primary)" />
+        </button>
+
+        {/* GitHub Auth Profile Trigger */}
+        <button className="btn btn-icon" onClick={onOpenAuth} title={userProfile ? `@${userProfile.username}` : 'Sign In with GitHub'}>
+          {userProfile ? (
+            <img
+              src={userProfile.avatarUrl}
+              alt={userProfile.username}
+              style={{ width: '22px', height: '22px', borderRadius: '50%' }}
+            />
+          ) : (
+            <GithubIcon size={18} />
+          )}
+        </button>
 
         {/* Settings Modal Trigger */}
         <button className="btn btn-icon" onClick={onOpenSettings} title="Settings & Access Token">

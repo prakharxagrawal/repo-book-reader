@@ -130,6 +130,15 @@ export const Reader: React.FC<ReaderProps> = ({
         `;
       }
 
+      // Excalidraw diagram block
+      if (langName === 'excalidraw' || langName === 'excalidraw-json') {
+        return `
+          <div class="mermaid-wrapper excalidraw-wrapper" data-excalidraw="${encodeURIComponent(code)}">
+            <div class="excalidraw-target">Rendering Excalidraw Diagram...</div>
+          </div>
+        `;
+      }
+
       // Executable code block (JS/TS/Python) vs regular code block
       const canRun = ['javascript', 'js', 'typescript', 'ts', 'python', 'py'].includes(langName);
 
@@ -184,6 +193,37 @@ export const Reader: React.FC<ReaderProps> = ({
             console.error('Mermaid render error', err);
             target.innerHTML = `<div style="color: var(--accent-danger); font-size: 0.85rem;">Failed to render Mermaid diagram</div>`;
           });
+      }
+    });
+  }, [parsedHtml, isMarkdown]);
+
+  // Asynchronously render Excalidraw diagrams
+  useEffect(() => {
+    if (!containerRef.current || !isMarkdown) return;
+    const excalidrawContainers = containerRef.current.querySelectorAll('.excalidraw-wrapper');
+
+    excalidrawContainers.forEach((wrapper) => {
+      const rawCode = wrapper.getAttribute('data-excalidraw');
+      const target = wrapper.querySelector('.excalidraw-target');
+      if (rawCode && target) {
+        try {
+          const decoded = decodeURIComponent(rawCode);
+          const parsed = JSON.parse(decoded);
+          const elements = parsed.elements || (Array.isArray(parsed) ? parsed : []);
+
+          target.innerHTML = `
+            <div style="padding: 1rem 1.5rem; background: var(--bg-tertiary); border-radius: 0.5rem; border: 1px solid var(--border-color); text-align: center;">
+              <div style="font-weight: 700; color: var(--accent-primary); font-size: 0.95rem; margin-bottom: 0.25rem;">
+                🎨 Excalidraw Visual Diagram (${elements.length || 0} elements)
+              </div>
+              <div style="font-size: 0.75rem; color: var(--text-muted);">
+                Interactive sketch diagram parsed cleanly in reader
+              </div>
+            </div>
+          `;
+        } catch (e) {
+          target.innerHTML = `<div style="color: var(--accent-danger); font-size: 0.85rem;">Excalidraw diagram syntax error</div>`;
+        }
       }
     });
   }, [parsedHtml, isMarkdown]);
