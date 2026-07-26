@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { marked } from 'marked';
-import mermaid from 'mermaid';
 import {
   Clock,
   BookOpen,
@@ -19,6 +18,12 @@ import {
 } from 'lucide-react';
 import { HeadingItem, FileCategory } from '../types';
 import { normalizePath } from '../services/githubApi';
+
+declare global {
+  interface Window {
+    mermaid?: any;
+  }
+}
 
 interface ReaderProps {
   currentPath: string | null;
@@ -62,14 +67,16 @@ export const Reader: React.FC<ReaderProps> = ({
 
   // Initialize Mermaid
   useEffect(() => {
-    try {
-      mermaid.initialize({
-        startOnLoad: false,
-        theme: 'dark',
-        securityLevel: 'loose',
-      });
-    } catch (e) {
-      console.error('Mermaid initialization error', e);
+    if (window.mermaid) {
+      try {
+        window.mermaid.initialize({
+          startOnLoad: false,
+          theme: 'dark',
+          securityLevel: 'loose',
+        });
+      } catch (e) {
+        console.error('Mermaid initialization error', e);
+      }
     }
   }, []);
 
@@ -155,7 +162,7 @@ export const Reader: React.FC<ReaderProps> = ({
 
   // Asynchronously render Mermaid diagrams
   useEffect(() => {
-    if (!containerRef.current || !isMarkdown) return;
+    if (!containerRef.current || !isMarkdown || !window.mermaid) return;
     const mermaidContainers = containerRef.current.querySelectorAll('.mermaid-wrapper');
 
     mermaidContainers.forEach((wrapper, idx) => {
@@ -168,7 +175,7 @@ export const Reader: React.FC<ReaderProps> = ({
           .replace(/&amp;/g, '&');
 
         const uniqueId = `mermaid-svg-${Date.now()}-${idx}`;
-        mermaid
+        window.mermaid
           .render(uniqueId, decoded)
           .then(({ svg }: { svg: string }) => {
             target.innerHTML = svg;
