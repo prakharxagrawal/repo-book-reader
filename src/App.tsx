@@ -20,7 +20,13 @@ import {
   saveUserNotes,
 } from './services/storage';
 import { fetchRepoDetails, fetchGitTreeItems, fetchFileContent, resolveMarkdownAssetUrls } from './services/githubApi';
-import { buildTocFromGitTree, parseSummaryMd, flattenToc } from './services/tocParser';
+import {
+  buildTocFromGitTree,
+  parseSummaryMd,
+  flattenToc,
+  extractSubChaptersFromMarkdown,
+  injectSubChaptersIntoToc,
+} from './services/tocParser';
 import { exportToPdf, exportToHtml } from './services/exportService';
 import { logUserActivity } from './services/analyticsService';
 import { handleOAuthCodeExchange } from './services/authService';
@@ -280,6 +286,14 @@ export function App() {
           activeNode.path
         );
         setMarkdownContent(resolved);
+
+        // Auto-extract sub-chapters into sidebar TOC for Markdown files
+        if (activeNode.fileCategory === 'markdown' || activeNode.path.toLowerCase().endsWith('.md')) {
+          const subChapters = extractSubChaptersFromMarkdown(rawMd, activeNode.path);
+          if (subChapters.length > 0) {
+            setToc((prevToc) => injectSubChaptersIntoToc(prevToc, activeNode.path, subChapters));
+          }
+        }
 
         // Save last read path
         setReadingState((prev) => {

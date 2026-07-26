@@ -47,7 +47,7 @@ export interface TocNode {
   id: string;
   title: string;
   path: string;
-  type: 'chapter' | 'section' | 'file' | 'folder';
+  type: 'chapter' | 'section' | 'file' | 'folder' | 'subchapter';
   level: number;
   children?: TocNode[];
   downloadUrl?: string;
@@ -57,6 +57,7 @@ export interface TocNode {
   extension?: string;
   language?: string;
   size?: number;
+  sectionAnchor?: string;
 }
 
 export interface HeadingItem {

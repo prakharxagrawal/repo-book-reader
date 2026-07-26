@@ -249,6 +249,66 @@ export function buildTocFromGitTree(treeItems: GitTreeItem[]): TocNode[] {
   return rootNodes;
 }
 
+export function extractSubChaptersFromMarkdown(markdownText: string, parentFilePath: string): TocNode[] {
+  const lines = markdownText.split('\n');
+  const subChapters: TocNode[] = [];
+  let chapterIndex = 1;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    // Match H1 (# Title) or H2 (## Title)
+    const match = trimmed.match(/^(#{1,2})\s+(.+)$/);
+    if (match) {
+      const level = match[1].length;
+      const rawTitle = match[2].replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/[`*_~]/g, '').trim();
+
+      // Ignore trivial title if it's identical to README or overview
+      if (rawTitle.toLowerCase() === 'readme' || rawTitle.toLowerCase() === 'overview') continue;
+
+      const slug = rawTitle
+        .toLowerCase()
+        .replace(/[^\w\s-]/g, '')
+        .replace(/\s+/g, '-');
+
+      if (!slug) continue;
+
+      subChapters.push({
+        id: `${parentFilePath}#${slug}`,
+        title: `Ch ${chapterIndex}. ${rawTitle}`,
+        path: parentFilePath,
+        type: 'subchapter',
+        level: level + 1,
+        sectionAnchor: slug,
+        fileCategory: 'markdown',
+      });
+
+      chapterIndex++;
+    }
+  }
+
+  return subChapters;
+}
+
+export function injectSubChaptersIntoToc(nodes: TocNode[], filePath: string, subChapters: TocNode[]): TocNode[] {
+  if (!subChapters || subChapters.length === 0) return nodes;
+
+  return nodes.map((node) => {
+    if (node.path === filePath && node.type !== 'folder') {
+      return {
+        ...node,
+        children: subChapters,
+      };
+    }
+    if (node.children && node.children.length > 0) {
+      return {
+        ...node,
+        children: injectSubChaptersIntoToc(node.children, filePath, subChapters),
+      };
+    }
+    return node;
+  });
+}
+
 export function flattenToc(nodes: TocNode[]): TocNode[] {
   const result: TocNode[] = [];
   function traverse(list: TocNode[]) {

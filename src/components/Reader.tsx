@@ -239,12 +239,28 @@ export const Reader: React.FC<ReaderProps> = ({
     headingElements.forEach((el, index) => {
       const text = el.textContent || '';
       const level = parseInt(el.tagName.replace('H', ''), 10);
-      const id = el.id || `heading-${index}-${text.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+      const slug = text
+        .toLowerCase()
+        .replace(/[^\w\s-]/g, '')
+        .replace(/\s+/g, '-');
+
+      const id = slug || `heading-${index}`;
       el.id = id;
       headingsList.push({ id, text, level });
     });
 
     onHeadingsExtracted(headingsList);
+
+    // Scroll to hash anchor if present in URL or selection
+    const hash = window.location.hash.replace('#', '');
+    if (hash) {
+      setTimeout(() => {
+        const target = document.getElementById(hash);
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 200);
+    }
   }, [parsedHtml, isMarkdown, onHeadingsExtracted]);
 
   // Attach event listeners for Copy Code and Run Code

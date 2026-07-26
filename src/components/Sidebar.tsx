@@ -14,6 +14,7 @@ import {
   Database,
   File,
   Layers,
+  BookOpen,
 } from 'lucide-react';
 import { TocNode } from '../types';
 
@@ -72,6 +73,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
       ) : (
         <Folder size={16} color="var(--accent-primary)" />
       );
+    }
+
+    if (node.type === 'subchapter') {
+      return <BookOpen size={14} color="#10b981" />;
     }
 
     const ext = node.extension || (node.path ? node.path.split('.').pop()?.toLowerCase() || '' : '');
